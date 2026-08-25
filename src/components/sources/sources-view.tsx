@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { open } from "@tauri-apps/plugin-dialog"
-import { Plus, FileText, RefreshCw, BookOpen, Trash2, Folder, ChevronRight, ChevronDown, Link, ExternalLink, Search, X } from "lucide-react"
+import { Plus, FileText, RefreshCw, BookOpen, Trash2, Folder, ChevronRight, ChevronDown, Link, ExternalLink, Search, X, FolderSearch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useWikiStore } from "@/stores/wiki-store"
-import { listDirectory, openPathInProject, readFile } from "@/commands/fs"
+import { listDirectory, openPathInProject, readFile, revealInFileManager } from "@/commands/fs"
 import type { FileNode } from "@/types/wiki"
 import { useTranslation } from "react-i18next"
 import { useAppDialog } from "@/stores/app-dialog-store"
-import { normalizePath } from "@/lib/path-utils"
+import { isAbsolutePath, normalizePath } from "@/lib/path-utils"
 import { decideDeleteClick } from "@/lib/sources-tree-delete"
 import { rescanProjectFileSync } from "@/lib/project-file-sync"
 import { sortFileNodes } from "@/lib/file-tree-order"
@@ -18,6 +18,7 @@ import {
   deleteSourceFile,
   deleteSourceFolder,
   enqueueSourceIngest,
+  getIngestBlockReason,
   importSourceFiles,
   importSourceFolder,
   type SkippedSourceImport,
@@ -292,6 +293,23 @@ export function SourcesView() {
     }
   }
 
+  async function handleReveal(node: FileNode) {
+    if (!project) return
+    const pp = normalizePath(project.path)
+    const full = isAbsolutePath(node.path)
+      ? normalizePath(node.path)
+      : `${pp}/${normalizePath(node.path)}`
+    try {
+      await revealInFileManager(full)
+    } catch (err) {
+      console.error("Failed to reveal in file manager:", err)
+      await appDialog.alert({ message: t("sources.revealInExplorerFailed", {
+        name: node.name,
+        error: String(err),
+      }) })
+    }
+  }
+
   async function handleDelete(node: FileNode) {
     if (!project) return
     const pp = normalizePath(project.path)
@@ -358,6 +376,15 @@ export function SourcesView() {
 
   async function handleIngest(node: FileNode) {
     if (!project || ingestingPath) return
+    const reason = getIngestBlockReason(node.path, llmConfig)
+    if (reason) {
+      await appDialog.alert({
+        message: t(`sources.ingestBlocked.${reason}`, {
+          defaultValue: t("sources.ingestBlocked.unknown"),
+        }),
+      })
+      return
+    }
     // Re-ingest goes through the same automated queue path as a fresh
     // import (`handleImport` above). Earlier this used `startIngest`,
     // which opens an interactive chat → user clicks "Save to Wiki" →
@@ -565,6 +592,7 @@ export function SourcesView() {
               nodes={filteredSources}
               onOpen={handleOpenSource}
               onOpenExternal={handleOpenSourceExternally}
+              onReveal={handleReveal}
               onIngest={handleIngest}
               onDelete={handleDelete}
               onDeleteFolder={handleDeleteFolder}
@@ -699,6 +727,7 @@ function SourceTree({
   nodes,
   onOpen,
   onOpenExternal,
+  onReveal,
   onIngest,
   onDelete,
   onDeleteFolder,
@@ -711,6 +740,7 @@ function SourceTree({
   nodes: FileNode[]
   onOpen: (node: FileNode) => void
   onOpenExternal: (node: FileNode) => void
+  onReveal: (node: FileNode) => void
   onIngest: (node: FileNode) => void
   onDelete: (node: FileNode) => void
   onDeleteFolder: (node: FileNode) => void
@@ -810,6 +840,16 @@ function SourceTree({
                     {countFiles(node.children)}
                   </span>
                 </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  title={t("sources.revealInExplorer")}
+                  aria-label={t("sources.revealInExplorer")}
+                  onClick={() => onReveal(node)}
+                >
+                  <FolderSearch className="h-4 w-4" />
+                </Button>
                 <DeleteButton
                   isPending={isPendingDelete}
                   onClick={() => handleDeleteClick(node)}
@@ -848,6 +888,16 @@ function SourceTree({
                 {t(`sources.ingestStatus.${ingestStatus}`)}
               </span>
             </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              title={t("sources.revealInExplorer")}
+              aria-label={t("sources.revealInExplorer")}
+              onClick={() => onReveal(node)}
+            >
+              <FolderSearch className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

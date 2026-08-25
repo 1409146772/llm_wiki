@@ -104,7 +104,14 @@ export function AppLayout({ onSwitchProject }: AppLayoutProps) {
     // existing IconSidebar + content row below. Banner is shrink-0
     // so it doesn't compress the work area; main row is flex-1 so
     // it fills the rest of the viewport.
-    <div className="flex h-full flex-col bg-background text-foreground">
+    //
+    // No `bg-background` here: the app background (theme color or a
+    // user wallpaper via BackgroundLayer) is provided by the body in
+    // index.css, and panels below use their own semi-transparent
+    // backgrounds so a wallpaper shows through the gaps. Keeping this
+    // transparent is visually identical to the old opaque bg (both are
+    // var(--background)) and only reveals a wallpaper when one is set.
+    <div className="flex h-full flex-col text-foreground">
       <UpdateBanner />
       <div className="flex min-h-0 flex-1">
         <IconSidebar onSwitchProject={onSwitchProject} />

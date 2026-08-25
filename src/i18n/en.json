@@ -205,7 +205,15 @@
     },
     "openExternal": "Open in default app",
     "openExternalFailed": "Failed to open {{name}}: {{error}}",
+    "revealInExplorer": "Open in file manager",
+    "revealInExplorerFailed": "Failed to open in file manager: {{error}}",
     "ingest": "Ingest",
+    "ingestBlocked": {
+      "unsupported-type": "This file type isn't supported for ingest.",
+      "sensitive-config": "Config files can't be ingested.",
+      "no-llm": "No usable LLM configured. Set a model or API key in Settings.",
+      "unknown": "This file can't be ingested."
+    },
     "ingestStatus": {
       "not-ingested": "Not ingested",
       "ingested": "Ingested",
@@ -901,7 +909,16 @@
         "zoom": "Interface zoom",
         "zoomHint": "Scales text and rem-based spacing across the app. Some fixed pixel panels keep their practical size limits.",
         "zoomIn": "Zoom in",
-        "zoomOut": "Zoom out"
+        "zoomOut": "Zoom out",
+        "background": "Background",
+        "backgroundHint": "Choose an image and adjust its opacity to soften the app background. The image shows through semi-transparent panels. Save to apply.",
+        "backgroundEmpty": "No background image",
+        "backgroundImport": "Import image",
+        "backgroundRemove": "Remove",
+        "backgroundOpacity": "Opacity",
+        "backgroundBrightness": "Brightness",
+        "backgroundSizeError": "Image is too large. Choose an image under 5 MB.",
+        "backgroundImportError": "Failed to import image."
       },
       "maintenance": {
         "title": "Maintenance",
@@ -1070,6 +1087,9 @@
     "selectedCount": "{{count}} selected",
     "restartSelected": "Restart",
     "cancelSelected": "Cancel",
+    "removeSelected": "Remove",
+    "removeSelectedTitle": "Remove selected cancelled tasks from the queue",
+    "removeOnlyCancelled": "Only cancelled tasks can be removed (skipped {{count}}).",
     "selectTask": "Select {{name}}",
     "moveUp": "Move earlier",
     "moveDown": "Move later",
@@ -1088,7 +1108,9 @@
   "fileTree": {
     "noProject": "No project open",
     "openProjectFolder": "Open project folder",
-    "openProjectFolderFailed": "Failed to open the project folder."
+    "openProjectFolderFailed": "Failed to open the project folder.",
+    "revealInExplorer": "Open in file manager",
+    "revealInExplorerFailed": "Failed to open in the file manager: {{error}}"
   },
   "graph": {
     "openProject": "Open a project to view the graph",

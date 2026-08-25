@@ -205,7 +205,15 @@
     },
     "openExternal": "Apri nell'app predefinita",
     "openExternalFailed": "Impossibile aprire {{name}}: {{error}}",
+    "revealInExplorer": "Apri nella gestione file",
+    "revealInExplorerFailed": "Impossibile aprire nella gestione file: {{error}}",
     "ingest": "Elabora",
+    "ingestBlocked": {
+      "unsupported-type": "Questo tipo di file non è supportato per l'acquisizione.",
+      "sensitive-config": "I file di configurazione non possono essere acquisiti.",
+      "no-llm": "Nessun LLM utilizzabile configurato. Imposta un modello o una chiave API nelle Impostazioni.",
+      "unknown": "Questo file non può essere acquisito."
+    },
     "ingestStatus": {
       "not-ingested": "Da elaborare",
       "ingested": "Elaborato",
@@ -901,7 +909,16 @@
         "zoom": "Zoom dell'interfaccia",
         "zoomHint": "Scala il testo e le spaziature basate su rem in tutta l'app. Alcuni pannelli a pixel fissi mantengono i loro limiti pratici di dimensione.",
         "zoomIn": "Aumenta lo zoom",
-        "zoomOut": "Riduci lo zoom"
+        "zoomOut": "Riduci lo zoom",
+        "background": "Sfondo",
+        "backgroundHint": "Scegli un'immagine e regola l'opacità per ammorbidire lo sfondo dell'app. L'immagine appare attraverso i pannelli semi-trasparenti. Salva per applicare.",
+        "backgroundEmpty": "Nessuna immagine di sfondo",
+        "backgroundImport": "Importa immagine",
+        "backgroundRemove": "Rimuovi",
+        "backgroundOpacity": "Opacità",
+        "backgroundBrightness": "Luminosità",
+        "backgroundSizeError": "L'immagine è troppo grande. Scegli un'immagine sotto i 5 MB.",
+        "backgroundImportError": "Impossibile importare l'immagine."
       },
       "maintenance": {
         "title": "Manutenzione",
@@ -1070,6 +1087,9 @@
     "selectedCount": "{{count}} selezionate",
     "restartSelected": "Riavvia",
     "cancelSelected": "Annulla",
+    "removeSelected": "Rimuovi",
+    "removeSelectedTitle": "Rimuovi le attività annullate selezionate dalla coda",
+    "removeOnlyCancelled": "Possono essere rimosse solo le attività annullate (salta {{count}}).",
     "selectTask": "Seleziona {{name}}",
     "moveUp": "Sposta prima",
     "moveDown": "Sposta dopo",
@@ -1088,7 +1108,9 @@
   "fileTree": {
     "noProject": "Nessun progetto aperto",
     "openProjectFolder": "Apri la cartella del progetto",
-    "openProjectFolderFailed": "Impossibile aprire la cartella del progetto."
+    "openProjectFolderFailed": "Impossibile aprire la cartella del progetto.",
+    "revealInExplorer": "Apri nella gestione file",
+    "revealInExplorerFailed": "Impossibile aprire nella gestione file: {{error}}"
   },
   "graph": {
     "openProject": "Apri un progetto per vedere il grafo",

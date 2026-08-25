@@ -252,6 +252,23 @@ export function folderContextForSourcePath(sourcePath: string, sourcesRoot = "ra
   return parts.join(" > ")
 }
 
+export type IngestBlockReason = "unsupported-type" | "sensitive-config" | "no-llm"
+
+/**
+ * Why a manual "ingest" click cannot proceed. Mirrors the filters inside
+ * `enqueueSourceIngest` so the Sources view can surface a real message
+ * instead of silently doing nothing. Returns null when ingest would run.
+ */
+export function getIngestBlockReason(
+  sourcePath: string,
+  llmConfig: LlmConfig,
+): IngestBlockReason | null {
+  if (!isIngestableSourcePath(sourcePath)) return "unsupported-type"
+  if (isSensitiveConfigSourceFile(sourcePath)) return "sensitive-config"
+  if (!hasUsableLlm(getTaskLlmConfig("ingest", llmConfig))) return "no-llm"
+  return null
+}
+
 export async function enqueueSourceIngest(
   project: WikiProject,
   sourcePaths: string[],

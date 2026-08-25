@@ -9,8 +9,10 @@ import { useLintStore } from "@/stores/lint-store"
 import { useChatStore } from "@/stores/chat-store"
 import { BASE_FONT_SIZE_PX, useZoomStore } from "@/stores/zoom-store"
 import { openProject } from "@/commands/fs"
-import { getLastProject, getRecentProjects, saveLastProject, loadLlmConfig, loadLanguage, loadSearchApiConfig, loadEmbeddingConfig, loadMineruConfig, loadMultimodalConfig, loadOutputLanguage, loadProviderConfigs, loadCustomLlmPresets, loadActivePresetId, loadTaskModelRouting, loadProjectLlmOverride, loadProxyConfig, loadScheduledImportConfig, saveScheduledImportConfig, loadSourceWatchConfig, loadApiConfig, loadGeneralConfig, loadZoomLevel } from "@/lib/project-store"
+import { getLastProject, getRecentProjects, saveLastProject, loadLlmConfig, loadLanguage, loadSearchApiConfig, loadEmbeddingConfig, loadMineruConfig, loadMultimodalConfig, loadOutputLanguage, loadProviderConfigs, loadCustomLlmPresets, loadActivePresetId, loadTaskModelRouting, loadProjectLlmOverride, loadProxyConfig, loadScheduledImportConfig, saveScheduledImportConfig, loadSourceWatchConfig, loadApiConfig, loadGeneralConfig, loadZoomLevel, loadBackgroundImage, loadBackgroundOpacity, loadBackgroundBrightness } from "@/lib/project-store"
 import { loadReviewItems, loadLintItems, loadChatHistory, loadChatPreferences } from "@/lib/persist"
+import { useBackgroundStore } from "@/stores/background-store"
+import { BackgroundLayer } from "@/components/layout/background-layer"
 import { setupAutoSave } from "@/lib/auto-save"
 import { startClipWatcher } from "@/lib/clip-watcher"
 import { DEFAULT_SOURCE_WATCH_CONFIG } from "@/lib/source-watch-config"
@@ -309,6 +311,15 @@ function App() {
         const savedZoom = await loadZoomLevel()
         applyDocumentZoom(savedZoom)
         useZoomStore.getState().setLevel(savedZoom)
+
+        const [backgroundImage, backgroundOpacity, backgroundBrightness] = await Promise.all([
+          loadBackgroundImage(),
+          loadBackgroundOpacity(),
+          loadBackgroundBrightness(),
+        ])
+        useBackgroundStore.getState().setImage(backgroundImage)
+        useBackgroundStore.getState().setOpacity(backgroundOpacity)
+        useBackgroundStore.getState().setBrightness(backgroundBrightness)
 
         const savedConfig = await loadLlmConfig()
         if (savedConfig) {
@@ -617,7 +628,8 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-background text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <BackgroundLayer />
         Loading...
       </div>
     )
@@ -626,6 +638,7 @@ function App() {
   if (!project) {
     return (
       <>
+        <BackgroundLayer />
         <WelcomeScreen
           onCreateProject={() => setShowCreateDialog(true)}
           onOpenProject={handleOpenProject}
@@ -642,6 +655,7 @@ function App() {
 
   return (
     <>
+      <BackgroundLayer />
       <AppLayout onSwitchProject={handleSwitchProject} />
       <CreateProjectDialog
         open={showCreateDialog}
