@@ -13,6 +13,7 @@ import { getLastProject, getRecentProjects, saveLastProject, loadLlmConfig, load
 import { loadReviewItems, loadLintItems, loadChatHistory, loadChatPreferences } from "@/lib/persist"
 import { useBackgroundStore } from "@/stores/background-store"
 import { BackgroundLayer } from "@/components/layout/background-layer"
+import { FloatingOverlay } from "@/components/floating/floating-overlay"
 import { setupAutoSave } from "@/lib/auto-save"
 import { startClipWatcher } from "@/lib/clip-watcher"
 import { DEFAULT_SOURCE_WATCH_CONFIG } from "@/lib/source-watch-config"
@@ -136,6 +137,26 @@ function App() {
       startScheduledImport(proj, scheduledImportConfig)
     } catch (err) {
       console.warn("[startup] failed to hydrate scheduled import:", err)
+    }
+  }
+
+  async function hydrateScheduledLintAfterOpen(proj: WikiProject): Promise<void> {
+    try {
+      const { startScheduledLint } = await import("@/lib/scheduled-lint")
+      if (!isCurrentProject(proj)) return
+      startScheduledLint(proj)
+    } catch (err) {
+      console.warn("[startup] failed to hydrate scheduled lint:", err)
+    }
+  }
+
+  async function hydrateScheduledIndexAfterOpen(proj: WikiProject): Promise<void> {
+    try {
+      const { startScheduledIndex } = await import("@/lib/scheduled-index")
+      if (!isCurrentProject(proj)) return
+      startScheduledIndex(proj)
+    } catch (err) {
+      console.warn("[startup] failed to hydrate scheduled index:", err)
     }
   }
 
@@ -568,6 +589,8 @@ function App() {
       setSelectedFile(null)
     })
     void hydrateScheduledImportAfterOpen(proj)
+    void hydrateScheduledLintAfterOpen(proj)
+    void hydrateScheduledIndexAfterOpen(proj)
     // Heavy side-store hydration happens after the project shell is allowed
     // to render. Each write has a stale-project guard so a fast project switch
     // cannot apply old review/lint/chat state to the new project.
@@ -602,6 +625,12 @@ function App() {
     // Stop scheduled import before switching projects
     import("@/lib/scheduled-import").then(({ stopScheduledImport }) => {
       stopScheduledImport()
+    }).catch(() => {})
+    import("@/lib/scheduled-lint").then(({ stopScheduledLint }) => {
+      stopScheduledLint()
+    }).catch(() => {})
+    import("@/lib/scheduled-index").then(({ stopScheduledIndex }) => {
+      stopScheduledIndex()
     }).catch(() => {})
 
     // Save current project's scheduled import config before clearing
@@ -656,6 +685,7 @@ function App() {
   return (
     <>
       <BackgroundLayer />
+      <FloatingOverlay />
       <AppLayout onSwitchProject={handleSwitchProject} />
       <CreateProjectDialog
         open={showCreateDialog}

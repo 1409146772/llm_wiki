@@ -1,14 +1,36 @@
 {
+  "floating": {
+    "chatTitle": "Chat",
+    "empty": "Nessuna conversazione attiva",
+    "openChat": "Apri chat",
+    "replyDone": "La risposta è pronta.",
+    "openApp": "Apri app",
+    "collapse": "Comprimi",
+    "collapseToFloat": "Comprimi in finestra flottante"
+  },
   "app": {
     "title": "LLM Wiki",
     "subtitle": "Costruisci e mantieni la tua knowledge base personale con gli LLM"
   },
   "common": {
-    "retry": "Riprova", "cancel": "Annulla", "ignore": "Ignora", "close": "Chiudi", "ok": "OK", "confirm": "Conferma", "notice": "Avviso",
-    "dismiss": "Nascondi", "loading": "Caricamento...", "optional": "opzionale"
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "ignore": "Ignora",
+    "close": "Chiudi",
+    "ok": "OK",
+    "confirm": "Conferma",
+    "notice": "Avviso",
+    "dismiss": "Nascondi",
+    "loading": "Caricamento...",
+    "optional": "opzionale"
   },
-  "layout": { "showSidebar": "Mostra la barra laterale", "hideSidebar": "Nascondi la barra laterale" },
-  "errors": { "generic": "Qualcosa è andato storto" },
+  "layout": {
+    "showSidebar": "Mostra la barra laterale",
+    "hideSidebar": "Nascondi la barra laterale"
+  },
+  "errors": {
+    "generic": "Qualcosa è andato storto"
+  },
   "mermaid": {
     "renderFailed": "Impossibile visualizzare il diagramma Mermaid",
     "showDetails": "Mostra i dettagli del parser",
@@ -24,6 +46,7 @@
     "graph": "Grafo",
     "lint": "Lint",
     "review": "Revisione",
+    "history": "Cronologia",
     "skills": "Skill",
     "settings": "Impostazioni",
     "settingsShortcut": " (Cmd/Ctrl+,)",
@@ -35,6 +58,20 @@
     "message": "La versione {{version}} è disponibile",
     "openDownload": "Apri la pagina di download",
     "dismiss": "Nascondi"
+  },
+  "history": {
+    "title": "Cronologia operazioni",
+    "empty": "Nessuna cronologia operazioni.",
+    "refresh": "Aggiorna",
+    "openLog": "Apri log.md",
+    "actions": {
+      "ingest": "Ingestione",
+      "delete": "Eliminazione",
+      "exclude": "Escluso dall'ingestione",
+      "review": "Revisione",
+      "save": "Salva nel wiki",
+      "other": "Operazione"
+    }
   },
   "welcome": {
     "newProject": "Nuovo progetto",
@@ -49,11 +86,19 @@
     "allSources": "Tutte le fonti",
     "noWikiPages": "Ancora nessuna pagina wiki. Importa delle fonti per iniziare.",
     "typeLabels": {
-      "overview": "Panoramica", "entity": "Entità", "concept": "Concetti",
-      "source": "Fonti", "synthesis": "Sintesi", "finding": "Risultati",
-      "thesis": "Tesi", "methodology": "Metodologie",
-      "comparison": "Confronti", "query": "Query"
-    }
+      "overview": "Panoramica",
+      "entity": "Entità",
+      "concept": "Concetti",
+      "source": "Fonti",
+      "synthesis": "Sintesi",
+      "finding": "Risultati",
+      "thesis": "Tesi",
+      "methodology": "Metodologie",
+      "comparison": "Confronti",
+      "query": "Query"
+    },
+    "loadingWiki": "Caricamento pagine Wiki…",
+    "wikiLoadFailed": "Impossibile caricare le pagine Wiki: {{error}}"
   },
   "editor": {
     "edit": "Modifica",
@@ -94,7 +139,10 @@
       "createFailed": "Non è stato possibile creare la pagina mancante.",
       "emptyDraftError": "Il modello ha restituito una bozza vuota."
     },
-    "frontmatter": { "origin": "Origine", "more": "Altro" },
+    "frontmatter": {
+      "origin": "Origine",
+      "more": "Altro"
+    },
     "rawMarkdownEditor": "Editor Markdown grezzo"
   },
   "research": {
@@ -223,6 +271,10 @@
       "failed": "Non riuscito",
       "cancelled": "Annullato"
     },
+    "excludeFromIngest": "Escludi dall'ingestione",
+    "allowIngest": "Consenti ingestione",
+    "excluded": "Escluso",
+    "excludeConfirm": "Escludere \"{{name}}\" dall'ingestione?\n\nIl file sorgente verrà mantenuto, ma le pagine wiki che ha generato verranno rimosse. Potrai reingestionarlo in seguito.",
     "delete": "Elimina la fonte e le pagine wiki collegate",
     "deleteConfirm": "Eliminare \"{{name}}\" e le pagine wiki collegate?\n\nQuesta operazione:\n- elimina il file sorgente\n- elimina le pagine wiki generate da questa fonte\n- aggiorna index.md",
     "deleteFolder": "Elimina la cartella {{name}} (ricorsivo)",
@@ -334,6 +386,7 @@
     "referencePreview": "Anteprima del riferimento",
     "references": "Riferimenti",
     "details": "Dettagli",
+    "noWikiMatch": "Nessuna pagina wiki corrispondente trovata. Questa risposta potrebbe non essere basata sulla knowledge base.",
     "contextDetails": "Dettagli del contesto",
     "contextDetailsScope": "Prove registrate fornite per questa risposta",
     "contextItems": "Elementi",
@@ -415,6 +468,20 @@
     "runLint": "Esegui il lint",
     "runLintHint": "Esegui il lint per controllare lo stato del wiki",
     "runLintDescription": "Cerca pagine orfane, link non validi e altro",
+    "scheduleSetting": "Controllo programmato",
+    "scheduleEnabled": "Esegui il controllo automaticamente nei giorni selezionati a un'ora fissa",
+    "weekday": {
+      "sun": "Dom",
+      "mon": "Lun",
+      "tue": "Mar",
+      "wed": "Mer",
+      "thu": "Gio",
+      "fri": "Ven",
+      "sat": "Sab"
+    },
+    "scheduleTime": "Ora",
+    "scheduleHint": "Esegue automaticamente i controlli strutturali nei giorni selezionati all'ora impostata. Segue il toggle Semantico e le regole correnti.",
+    "lastScheduledRun": "Ultimo controllo",
     "allClear": "Tutto a posto!",
     "noIssues": "Nessun problema rilevato.",
     "warnings": "Avvisi",
@@ -541,7 +608,7 @@
           "activeDefault": "Usa il modello attivo",
           "hint": "Scegli modelli distinti per la chat interattiva e per l'elaborazione dei documenti. Il modello attivo resta il fallback."
         },
-      "projectOverride": {
+        "projectOverride": {
           "enabled": "Usa un modello specifico per il progetto",
           "provider": "Provider del progetto",
           "selectProvider": "Seleziona un provider",
@@ -627,7 +694,6 @@
           "max": "Massimo",
           "custom": "Personalizzato",
           "budgetTokens": "token di budget per il ragionamento",
-
           "hint": "Controlla il ragionamento per la chat. L'elaborazione dei documenti usa l'impostazione separata qui sotto.",
           "ingestTitle": "Ragionamento durante l'ingest",
           "ingestHint": "Di norma va tenuto spento: l'ingest chiede output strutturato e il ragionamento costa tempo senza migliorarlo. Alzalo solo se il modello si rifiuta di funzionare con il ragionamento disattivato."
@@ -935,6 +1001,16 @@
           "exported": "Progetto esportato in {{path}}",
           "imported": "{{name}} importato. Cambia progetto per aprirlo."
         },
+        "indexSchedule": {
+          "title": "Ricostruzione indicizzata programmata",
+          "enabled": "Ricostruisci l'indice automaticamente a intervalli",
+          "interval": "Intervallo",
+          "minutes": "minuti",
+          "lastRun": "Ultima ricostruzione",
+          "hint": "Ricostruisce wiki/index.md con la stessa modalità deterministica del pulsante sopra. Imposta 60 per l'orario, 1440 per il giornaliero.",
+          "save": "Salva pianificazione",
+          "saving": "Salvataggio..."
+        },
         "history": {
           "title": "Cronologia delle versioni dei file",
           "description": "Gli snapshot di rollback opzionali sono salvati in .llm-wiki/history. I file attuali non vengono conservati qui.",
@@ -1097,12 +1173,25 @@
     "fileSync": "Sincronizzazione file",
     "rescan": "Riesamina",
     "rescanTitle": "Cerca modifiche esterne nei file del progetto",
-    "changeKinds": { "created": "Creato", "modified": "Modificato", "deleted": "Eliminato" },
+    "changeKinds": {
+      "created": "Creato",
+      "modified": "Modificato",
+      "deleted": "Eliminato"
+    },
     "fileTypes": {
-      "entity": "Entità", "concept": "Concetto", "source": "Fonte", "query": "Query",
-      "synthesis": "Sintesi", "comparison": "Confronto", "finding": "Risultato",
-      "thesis": "Tesi", "methodology": "Metodologia", "overview": "Panoramica",
-      "index": "Indice", "log": "Log", "file": "File"
+      "entity": "Entità",
+      "concept": "Concetto",
+      "source": "Fonte",
+      "query": "Query",
+      "synthesis": "Sintesi",
+      "comparison": "Confronto",
+      "finding": "Risultato",
+      "thesis": "Tesi",
+      "methodology": "Metodologia",
+      "overview": "Panoramica",
+      "index": "Indice",
+      "log": "Log",
+      "file": "File"
     }
   },
   "fileTree": {

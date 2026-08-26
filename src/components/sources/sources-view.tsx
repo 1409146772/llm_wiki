@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { open } from "@tauri-apps/plugin-dialog"
-import { Plus, FileText, RefreshCw, BookOpen, Trash2, Folder, ChevronRight, ChevronDown, Link, ExternalLink, Search, X, FolderSearch } from "lucide-react"
+import { Plus, FileText, RefreshCw, BookOpen, Trash2, Folder, ChevronRight, ChevronDown, Link, ExternalLink, Search, X, FolderSearch, Ban, Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -18,6 +18,7 @@ import {
   deleteSourceFile,
   deleteSourceFolder,
   enqueueSourceIngest,
+  excludeSourceFromIngest,
   getIngestBlockReason,
   importSourceFiles,
   importSourceFolder,
@@ -26,6 +27,9 @@ import {
 } from "@/lib/source-lifecycle"
 import { filterRawSourceTree } from "@/lib/source-filter"
 import { refreshProjectFileTree } from "@/lib/project-file-tree-refresh"
+import { saveSourceWatchConfig } from "@/lib/project-store"
+import { normalizeSourceWatchConfig, sourceRelativeKey } from "@/lib/source-watch-config"
+import { collectAllFilesIncludingDot } from "@/lib/sources-tree-delete"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { importSourceUrls, parseImportUrls, type UrlImportResult } from "@/lib/url-source-import"
 import { listIngestedSourceIdentities } from "@/lib/ingest-cache"
@@ -149,6 +153,10 @@ export function SourcesView() {
   )
   const totalSourceCount = useMemo(() => countFiles(sources), [sources])
   const filteredSourceCount = useMemo(() => countFiles(filteredSources), [filteredSources])
+  const excludedPaths = useMemo(
+    () => normalizeSourceWatchConfig(sourceWatchConfig).excludedPaths,
+    [sourceWatchConfig],
+  )
 
   async function handleRefreshSources() {
     if (!project || refreshing) return
@@ -402,6 +410,47 @@ export function SourcesView() {
     }
   }
 
+  async function handleToggleExclude(node: FileNode) {
+    if (!project) return
+    const pp = normalizePath(project.path)
+    const cfg = normalizeSourceWatchConfig(useWikiStore.getState().sourceWatchConfig)
+    const key = sourceRelativeKey(node.path)
+    const isOwnExcluded = cfg.excludedPaths.includes(key)
+
+    if (!isOwnExcluded) {
+      const confirmed = await appDialog.confirm({
+        message: t("sources.excludeConfirm", { name: node.name }),
+      })
+      if (!confirmed) return
+    }
+
+    const nextConfig = {
+      ...cfg,
+      excludedPaths: isOwnExcluded
+        ? cfg.excludedPaths.filter((ex) => ex !== key)
+        : [...cfg.excludedPaths, key],
+    }
+    useWikiStore.getState().setSourceWatchConfig(nextConfig)
+    await saveSourceWatchConfig(nextConfig, project.id)
+
+    if (!isOwnExcluded) {
+      // Excluding also cascade-cleans any already-ingested content, keeping
+      // the source files on disk (no deleteFile).
+      const sourcePaths = node.is_dir
+        ? collectAllFilesIncludingDot(node).map((f) => f.path)
+        : [node.path]
+      if (sourcePaths.length > 0) {
+        await excludeSourceFromIngest(pp, sourcePaths)
+      }
+    }
+
+    await loadSources()
+    await refreshProjectFileTree(pp, {
+      projectId: project.id,
+      bumpDataVersion: true,
+    })
+  }
+
   return (
     <TooltipProvider delay={300}>
       <div className="flex h-full flex-col">
@@ -596,10 +645,12 @@ export function SourcesView() {
               onIngest={handleIngest}
               onDelete={handleDelete}
               onDeleteFolder={handleDeleteFolder}
+              onToggleExclude={handleToggleExclude}
               pendingDeletePath={pendingDeletePath}
               setPendingDeletePath={setPendingDeletePath}
               ingestingPath={ingestingPath}
               sourceStatuses={sourceStatuses}
+              excludedPaths={excludedPaths}
               forceExpanded={Boolean(sourceQuery.trim())}
             />
           </div>
@@ -731,10 +782,12 @@ function SourceTree({
   onIngest,
   onDelete,
   onDeleteFolder,
+  onToggleExclude,
   pendingDeletePath,
   setPendingDeletePath,
   ingestingPath,
   sourceStatuses,
+  excludedPaths,
   forceExpanded,
 }: {
   nodes: FileNode[]
@@ -744,6 +797,7 @@ function SourceTree({
   onIngest: (node: FileNode) => void
   onDelete: (node: FileNode) => void
   onDeleteFolder: (node: FileNode) => void
+  onToggleExclude: (node: FileNode) => void
   /** Path of the node currently in "click again to confirm" state.
    *  Lifted to the parent so only ONE button is armed at a time
    *  across the whole tree — clicking another delete arms that one
@@ -752,6 +806,7 @@ function SourceTree({
   setPendingDeletePath: (path: string | null) => void
   ingestingPath: string | null
   sourceStatuses: ReadonlyMap<string, SourceIngestStatus>
+  excludedPaths: string[]
   forceExpanded: boolean
 }) {
   const { t } = useTranslation()
@@ -815,6 +870,11 @@ function SourceTree({
       {visibleRows.map(({ node, depth }) => {
         const isPendingDelete = pendingDeletePath === node.path
         const ingestStatus = sourceStatuses.get(normalizePath(node.path)) ?? "not-ingested"
+        const sourceKey = sourceRelativeKey(node.path)
+        const isOwnExcluded = excludedPaths.includes(sourceKey)
+        const isEffectivelyExcluded = excludedPaths.some(
+          (ex) => sourceKey === ex || sourceKey.startsWith(`${ex}/`),
+        )
         if (node.is_dir && node.children) {
           const isCollapsed = !forceExpanded && (collapsed[node.path] ?? false)
           return (
@@ -849,6 +909,16 @@ function SourceTree({
                   onClick={() => onReveal(node)}
                 >
                   <FolderSearch className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  title={isOwnExcluded ? t("sources.allowIngest") : t("sources.excludeFromIngest")}
+                  aria-label={isOwnExcluded ? t("sources.allowIngest") : t("sources.excludeFromIngest")}
+                  onClick={() => onToggleExclude(node)}
+                >
+                  {isOwnExcluded ? <Undo2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                 </Button>
                 <DeleteButton
                   isPending={isPendingDelete}
@@ -887,6 +957,11 @@ function SourceTree({
               >
                 {t(`sources.ingestStatus.${ingestStatus}`)}
               </span>
+              {isEffectivelyExcluded && (
+                <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                  {t("sources.excluded")}
+                </span>
+              )}
             </button>
             <Button
               variant="ghost"
@@ -921,6 +996,16 @@ function SourceTree({
               onClick={() => onIngest(node)}
             >
               <BookOpen className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              title={isOwnExcluded ? t("sources.allowIngest") : t("sources.excludeFromIngest")}
+              aria-label={isOwnExcluded ? t("sources.allowIngest") : t("sources.excludeFromIngest")}
+              onClick={() => onToggleExclude(node)}
+            >
+              {isOwnExcluded ? <Undo2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
             </Button>
             <DeleteButton
               isPending={isPendingDelete}

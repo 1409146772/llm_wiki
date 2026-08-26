@@ -1,14 +1,36 @@
 {
+  "floating": {
+    "chatTitle": "对话",
+    "empty": "暂无进行中的对话",
+    "openChat": "打开对话",
+    "replyDone": "回复完成",
+    "openApp": "打开应用",
+    "collapse": "收起",
+    "collapseToFloat": "收起为浮窗"
+  },
   "app": {
     "title": "LLM Wiki",
     "subtitle": "用 LLM 构建和维护你的个人知识库"
   },
   "common": {
-    "retry": "重试", "cancel": "取消", "ignore": "忽略", "close": "关闭", "ok": "确定", "confirm": "确认", "notice": "提示",
-    "dismiss": "关闭", "loading": "加载中……", "optional": "可选"
+    "retry": "重试",
+    "cancel": "取消",
+    "ignore": "忽略",
+    "close": "关闭",
+    "ok": "确定",
+    "confirm": "确认",
+    "notice": "提示",
+    "dismiss": "关闭",
+    "loading": "加载中……",
+    "optional": "可选"
   },
-  "layout": { "showSidebar": "展开侧栏", "hideSidebar": "收起侧栏" },
-  "errors": { "generic": "出现错误" },
+  "layout": {
+    "showSidebar": "展开侧栏",
+    "hideSidebar": "收起侧栏"
+  },
+  "errors": {
+    "generic": "出现错误"
+  },
   "mermaid": {
     "renderFailed": "无法渲染 Mermaid 图表",
     "showDetails": "查看解析器详情",
@@ -24,6 +46,7 @@
     "graph": "关系图",
     "lint": "检查",
     "review": "待审阅",
+    "history": "历史操作",
     "skills": "Skills",
     "settings": "设置",
     "settingsShortcut": " (Cmd/Ctrl+,)",
@@ -35,6 +58,20 @@
     "message": "新版本 {{version}} 已发布",
     "openDownload": "打开下载页",
     "dismiss": "关闭"
+  },
+  "history": {
+    "title": "历史操作",
+    "empty": "暂无历史操作。",
+    "refresh": "刷新",
+    "openLog": "打开 log.md",
+    "actions": {
+      "ingest": "摄入",
+      "delete": "删除",
+      "exclude": "禁止摄取",
+      "review": "审阅",
+      "save": "保存到 Wiki",
+      "other": "操作"
+    }
   },
   "welcome": {
     "newProject": "新建项目",
@@ -49,11 +86,19 @@
     "allSources": "全部资料",
     "noWikiPages": "暂无 Wiki 页面，请先导入原始资料。",
     "typeLabels": {
-      "overview": "概览", "entity": "实体", "concept": "概念",
-      "source": "来源", "synthesis": "综合", "finding": "发现",
-      "thesis": "论点", "methodology": "方法论",
-      "comparison": "比较", "query": "查询"
-    }
+      "overview": "概览",
+      "entity": "实体",
+      "concept": "概念",
+      "source": "来源",
+      "synthesis": "综合",
+      "finding": "发现",
+      "thesis": "论点",
+      "methodology": "方法论",
+      "comparison": "比较",
+      "query": "查询"
+    },
+    "loadingWiki": "正在加载 Wiki 页面…",
+    "wikiLoadFailed": "加载 Wiki 页面失败：{{error}}"
   },
   "editor": {
     "edit": "编辑",
@@ -94,7 +139,10 @@
       "createFailed": "无法创建缺失页面。",
       "emptyDraftError": "模型返回了空白草稿。"
     },
-    "frontmatter": { "origin": "来源", "more": "更多" },
+    "frontmatter": {
+      "origin": "来源",
+      "more": "更多"
+    },
     "rawMarkdownEditor": "Markdown 源码编辑器"
   },
   "research": {
@@ -223,6 +271,10 @@
       "failed": "失败",
       "cancelled": "已取消"
     },
+    "excludeFromIngest": "禁止摄取",
+    "allowIngest": "允许摄取",
+    "excluded": "已禁止",
+    "excludeConfirm": "禁止摄取「{{name}}」？\n\n源文件会保留，但它生成的 wiki 页面将被移除。之后可重新摄取。",
     "delete": "删除资料及相关 Wiki 页面",
     "deleteConfirm": "删除「{{name}}」及其相关 Wiki 页面？\n\n此操作将：\n- 删除原始资料文件\n- 删除由该资料生成的 Wiki 页面\n- 更新 index.md",
     "deleteFolder": "删除文件夹 {{name}}（递归）",
@@ -334,6 +386,7 @@
     "referencePreview": "引用预览",
     "references": "引用",
     "details": "详情",
+    "noWikiMatch": "没有匹配的知识库页面。此回答可能未基于知识库内容。",
     "contextDetails": "上下文详情",
     "contextDetailsScope": "本回答实际记录的引用证据",
     "contextItems": "条目",
@@ -415,6 +468,20 @@
     "runLint": "开始检查",
     "runLintHint": "运行检查以诊断 Wiki 健康状况",
     "runLintDescription": "检查孤立页面、失效链接等问题",
+    "scheduleSetting": "定期检查",
+    "scheduleEnabled": "在选定日期的设定时间自动运行检查",
+    "weekday": {
+      "sun": "周日",
+      "mon": "周一",
+      "tue": "周二",
+      "wed": "周三",
+      "thu": "周四",
+      "fri": "周五",
+      "sat": "周六"
+    },
+    "scheduleTime": "时间",
+    "scheduleHint": "在选定的星期几与时间自动运行结构检查。遵循“语义”开关与当前规则。",
+    "lastScheduledRun": "上次检查",
     "allClear": "一切正常！",
     "noIssues": "未发现问题。",
     "warnings": "警告",
@@ -541,7 +608,7 @@
           "activeDefault": "使用当前活跃模型",
           "hint": "可为交互聊天和文档摄取分别选择模型；未指定时继续使用当前活跃模型。"
         },
-      "projectOverride": {
+        "projectOverride": {
           "enabled": "为当前项目使用独立模型",
           "provider": "项目 Provider",
           "selectProvider": "选择 Provider",
@@ -627,7 +694,6 @@
           "max": "最大",
           "custom": "自定义",
           "budgetTokens": "thinking token 预算",
-
           "hint": "控制聊天时的推理强度；文档摄取使用下方的独立设置。",
           "ingestTitle": "导入时的推理",
           "ingestHint": "通常应关闭：导入需要结构化输出，推理只会增加耗时而无助于质量。仅当模型拒绝在关闭推理的情况下运行时才调高。"
@@ -935,6 +1001,16 @@
           "exported": "项目已导出到 {{path}}",
           "imported": "已导入 {{name}}，请切换项目后打开。"
         },
+        "indexSchedule": {
+          "title": "定期重建索引",
+          "enabled": "定期自动重建索引",
+          "interval": "间隔",
+          "minutes": "分钟",
+          "lastRun": "上次重建",
+          "hint": "用与上方按钮相同的确定性方式自动重建 wiki/index.md。设 60 为每小时，1440 为每天。",
+          "save": "保存计划",
+          "saving": "保存中..."
+        },
         "history": {
           "title": "文件版本历史",
           "description": "可选的回滚快照保存在 .llm-wiki/history，当前文件不存放在这里。",
@@ -1097,12 +1173,25 @@
     "fileSync": "文件同步",
     "rescan": "重新扫描",
     "rescanTitle": "扫描项目文件的外部变更",
-    "changeKinds": { "created": "已创建", "modified": "已修改", "deleted": "已删除" },
+    "changeKinds": {
+      "created": "已创建",
+      "modified": "已修改",
+      "deleted": "已删除"
+    },
     "fileTypes": {
-      "entity": "实体", "concept": "概念", "source": "来源", "query": "查询",
-      "synthesis": "综合", "comparison": "比较", "finding": "发现",
-      "thesis": "论点", "methodology": "方法论", "overview": "概览",
-      "index": "索引", "log": "日志", "file": "文件"
+      "entity": "实体",
+      "concept": "概念",
+      "source": "来源",
+      "query": "查询",
+      "synthesis": "综合",
+      "comparison": "比较",
+      "finding": "发现",
+      "thesis": "论点",
+      "methodology": "方法论",
+      "overview": "概览",
+      "index": "索引",
+      "log": "日志",
+      "file": "文件"
     }
   },
   "fileTree": {

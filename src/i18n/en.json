@@ -1,14 +1,36 @@
 {
+  "floating": {
+    "chatTitle": "Chat",
+    "empty": "No active conversation",
+    "openChat": "Open chat",
+    "replyDone": "The reply is ready.",
+    "openApp": "Open app",
+    "collapse": "Collapse",
+    "collapseToFloat": "Collapse to floating window"
+  },
   "app": {
     "title": "LLM Wiki",
     "subtitle": "Build and maintain your personal knowledge base with LLMs"
   },
   "common": {
-    "retry": "Retry", "cancel": "Cancel", "ignore": "Ignore", "close": "Close", "ok": "OK", "confirm": "Confirm", "notice": "Notice",
-    "dismiss": "Dismiss", "loading": "Loading...", "optional": "optional"
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "ignore": "Ignore",
+    "close": "Close",
+    "ok": "OK",
+    "confirm": "Confirm",
+    "notice": "Notice",
+    "dismiss": "Dismiss",
+    "loading": "Loading...",
+    "optional": "optional"
   },
-  "layout": { "showSidebar": "Show sidebar", "hideSidebar": "Hide sidebar" },
-  "errors": { "generic": "Something went wrong" },
+  "layout": {
+    "showSidebar": "Show sidebar",
+    "hideSidebar": "Hide sidebar"
+  },
+  "errors": {
+    "generic": "Something went wrong"
+  },
   "mermaid": {
     "renderFailed": "Mermaid diagram could not be rendered",
     "showDetails": "Show parser details",
@@ -24,6 +46,7 @@
     "graph": "Graph",
     "lint": "Lint",
     "review": "Review",
+    "history": "History",
     "skills": "Skills",
     "settings": "Settings",
     "settingsShortcut": " (Cmd/Ctrl+,)",
@@ -35,6 +58,20 @@
     "message": "Version {{version}} is available",
     "openDownload": "Open download page",
     "dismiss": "Dismiss"
+  },
+  "history": {
+    "title": "Operation history",
+    "empty": "No operation history yet.",
+    "refresh": "Refresh",
+    "openLog": "Open log.md",
+    "actions": {
+      "ingest": "Ingest",
+      "delete": "Delete",
+      "exclude": "Excluded from ingest",
+      "review": "Review",
+      "save": "Save to wiki",
+      "other": "Operation"
+    }
   },
   "welcome": {
     "newProject": "New Project",
@@ -49,11 +86,19 @@
     "allSources": "All sources",
     "noWikiPages": "No wiki pages yet. Import sources to get started.",
     "typeLabels": {
-      "overview": "Overview", "entity": "Entities", "concept": "Concepts",
-      "source": "Sources", "synthesis": "Synthesis", "finding": "Findings",
-      "thesis": "Theses", "methodology": "Methodologies",
-      "comparison": "Comparisons", "query": "Queries"
-    }
+      "overview": "Overview",
+      "entity": "Entities",
+      "concept": "Concepts",
+      "source": "Sources",
+      "synthesis": "Synthesis",
+      "finding": "Findings",
+      "thesis": "Theses",
+      "methodology": "Methodologies",
+      "comparison": "Comparisons",
+      "query": "Queries"
+    },
+    "loadingWiki": "Loading wiki pages...",
+    "wikiLoadFailed": "Failed to load wiki pages: {{error}}"
   },
   "editor": {
     "edit": "Edit",
@@ -94,7 +139,10 @@
       "createFailed": "The missing page could not be created.",
       "emptyDraftError": "The model returned an empty draft."
     },
-    "frontmatter": { "origin": "Origin", "more": "More" },
+    "frontmatter": {
+      "origin": "Origin",
+      "more": "More"
+    },
     "rawMarkdownEditor": "Raw Markdown editor"
   },
   "research": {
@@ -223,6 +271,10 @@
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
+    "excludeFromIngest": "Exclude from ingest",
+    "allowIngest": "Allow ingest",
+    "excluded": "Excluded",
+    "excludeConfirm": "Exclude \"{{name}}\" from ingest?\n\nThe source file will be kept, but any wiki pages it generated will be removed. You can re-ingest it later.",
     "delete": "Delete source and related wiki pages",
     "deleteConfirm": "Delete \"{{name}}\" and its related wiki pages?\n\nThis will:\n- Delete the source file\n- Delete wiki pages generated from this source\n- Update index.md",
     "deleteFolder": "Delete folder {{name}} (recursive)",
@@ -334,6 +386,7 @@
     "referencePreview": "Reference preview",
     "references": "References",
     "details": "Details",
+    "noWikiMatch": "No matching wiki pages were found. This answer may not be grounded in the knowledge base.",
     "contextDetails": "Context details",
     "contextDetailsScope": "Recorded evidence supplied for this answer",
     "contextItems": "Items",
@@ -415,6 +468,20 @@
     "runLint": "Run Lint",
     "runLintHint": "Run lint to check wiki health",
     "runLintDescription": "Checks for orphan pages, broken links, and more",
+    "scheduleSetting": "Scheduled check",
+    "scheduleEnabled": "Run the check automatically on the selected days at a set time",
+    "weekday": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "scheduleTime": "Time",
+    "scheduleHint": "Runs structural checks automatically on the selected days at the set time. Follows the Semantic toggle and the current rules.",
+    "lastScheduledRun": "Last run",
     "allClear": "All clear!",
     "noIssues": "No issues found.",
     "warnings": "Warnings",
@@ -541,7 +608,7 @@
           "activeDefault": "Use active model",
           "hint": "Choose separate models for interactive chat and document ingest. The active model remains the fallback."
         },
-      "projectOverride": {
+        "projectOverride": {
           "enabled": "Use a project-specific model",
           "provider": "Project provider",
           "selectProvider": "Select a provider",
@@ -627,7 +694,6 @@
           "max": "Max",
           "custom": "Custom",
           "budgetTokens": "thinking budget tokens",
-
           "hint": "Controls reasoning for chat. Document ingest uses the separate setting below.",
           "ingestTitle": "Reasoning during ingest",
           "ingestHint": "Off is usually right: ingest asks for structured output and thinking costs time without helping. Raise it only if the model refuses to run with reasoning disabled."
@@ -935,6 +1001,16 @@
           "exported": "Project exported to {{path}}",
           "imported": "Imported {{name}}. Switch projects to open it."
         },
+        "indexSchedule": {
+          "title": "Scheduled index rebuild",
+          "enabled": "Rebuild the index automatically on an interval",
+          "interval": "Interval",
+          "minutes": "minutes",
+          "lastRun": "Last run",
+          "hint": "Rebuilds wiki/index.md with the same deterministic rebuild as the button above. Set 60 for hourly, 1440 for daily.",
+          "save": "Save schedule",
+          "saving": "Saving..."
+        },
         "history": {
           "title": "File version history",
           "description": "Optional rollback snapshots are stored in .llm-wiki/history. Current files are not stored here.",
@@ -1097,12 +1173,25 @@
     "fileSync": "File Sync",
     "rescan": "Rescan",
     "rescanTitle": "Scan project files for external changes",
-    "changeKinds": { "created": "Created", "modified": "Modified", "deleted": "Deleted" },
+    "changeKinds": {
+      "created": "Created",
+      "modified": "Modified",
+      "deleted": "Deleted"
+    },
     "fileTypes": {
-      "entity": "Entity", "concept": "Concept", "source": "Source", "query": "Query",
-      "synthesis": "Synthesis", "comparison": "Comparison", "finding": "Finding",
-      "thesis": "Thesis", "methodology": "Methodology", "overview": "Overview",
-      "index": "Index", "log": "Log", "file": "File"
+      "entity": "Entity",
+      "concept": "Concept",
+      "source": "Source",
+      "query": "Query",
+      "synthesis": "Synthesis",
+      "comparison": "Comparison",
+      "finding": "Finding",
+      "thesis": "Thesis",
+      "methodology": "Methodology",
+      "overview": "Overview",
+      "index": "Index",
+      "log": "Log",
+      "file": "File"
     }
   },
   "fileTree": {

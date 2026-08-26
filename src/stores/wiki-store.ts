@@ -279,6 +279,9 @@ interface SourceWatchConfig {
   excludeExtensions: string[]
   excludeDirs: string[]
   excludeGlobs: string[]
+  /** Exact file/folder paths (source-relative, e.g. "foo.md" / "docs/foo.pdf")
+   *  excluded from ingest via the Sources view. */
+  excludedPaths: string[]
   maxFileSizeMb: number
 }
 
@@ -423,7 +426,7 @@ interface WikiState {
    * one wiki-relative) still works.
    */
   pendingScrollImageSrc: string | null
-  activeView: "chat" | "wiki" | "sources" | "search" | "graph" | "lint" | "review" | "skills" | "settings"
+  activeView: "chat" | "wiki" | "sources" | "search" | "graph" | "lint" | "review" | "skills" | "settings" | "history"
   llmConfig: LlmConfig
   /** Persisted global/default config, kept separate while a project override is effective. */
   globalLlmConfig: LlmConfig

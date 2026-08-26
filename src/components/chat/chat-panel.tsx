@@ -1141,7 +1141,7 @@ export function ChatPanel() {
         const finalMessages: LlmChatMessage[] = [
           {
             role: "system",
-            content: "Answer using the provided LLM Wiki context and references. If the context is insufficient, say what is missing instead of inventing details.",
+            content: "Answer using the provided LLM Wiki context and references. The retrieved pages are numbered in the context as 1., 2., ... . After every factual claim, cite its source inline as [n] with the matching number (e.g. [1]). When listing a source (a source/来源 line), write each one as a clickable wiki link using the path from the reference list, e.g. [[wiki/entities/usb.md]] or [[entities/usb]]. Never invent a citation: if a claim is not supported by the provided context, say it is not covered instead. If the context is insufficient, say what is missing rather than inventing details.",
           },
           ...(sendOptions.historyOverride ?? chatMessagesToLLM(priorMessages)),
           { role: "user", content: userContent },

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
-  FileText, Users, Lightbulb, BookOpen, HelpCircle, GitMerge, BarChart3, TrendingUp, Target, ChevronRight, ChevronDown, Layout, Globe, Trash2,
+  FileText, Users, Lightbulb, BookOpen, HelpCircle, GitMerge, BarChart3, TrendingUp, Target, ChevronRight, ChevronDown, Layout, Globe, Trash2, LoaderCircle,
 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -44,6 +44,22 @@ function typeConfig(type: string): { icon: typeof FileText; label: string; color
   return TYPE_CONFIG[type] ?? { icon: FileText, label: wikiTypeLabel(type), color: "text-muted-foreground", order: 99 }
 }
 
+/** Run async tasks with bounded concurrency. The wiki page list is large
+ *  (thousands of files) and each is read over IPC; reading them all serially
+ *  is slow, and launching thousands at once can overwhelm the IPC bridge. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const idx = cursor++
+      results[idx] = await fn(items[idx])
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
 export function KnowledgeTree() {
   const { t } = useTranslation()
   const appDialog = useAppDialog()
@@ -53,6 +69,8 @@ export function KnowledgeTree() {
   const openPathInPreview = useWikiStore((s) => s.openPathInPreview)
   const dataVersion = useWikiStore((s) => s.dataVersion)
   const [pages, setPages] = useState<WikiPageInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [scanError, setScanError] = useState<string | null>(null)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["overview", "entity", "concept", "source"]))
   // Two-stage delete: first click arms the row, second click executes.
@@ -60,43 +78,57 @@ export function KnowledgeTree() {
   const [armedPath, setArmedPath] = useState<string | null>(null)
   const [deletingPath, setDeletingPath] = useState<string | null>(null)
 
+  const loadReqIdRef = useRef(0)
+
   const loadPages = useCallback(async () => {
     if (!project) return
     const pp = normalizePath(project.path)
+    const requestId = ++loadReqIdRef.current
+    setScanError(null)
     try {
       const wikiTree = await listDirectory(`${pp}/wiki`)
-      const mdFiles = flattenMdFiles(wikiTree)
+      const mdFiles = flattenMdFiles(wikiTree).filter(
+        (f) => f.name !== "index.md" && f.name !== "log.md",
+      )
 
-      const pageInfos: WikiPageInfo[] = []
-      for (const file of mdFiles) {
-        // Skip index.md and log.md
-        if (file.name === "index.md" || file.name === "log.md") continue
+      const pageInfos = await mapLimit(mdFiles, 24, async (file): Promise<WikiPageInfo> => {
         try {
           const content = await readFile(file.path)
-          const info = parsePageInfo(file.path, file.name, content)
-          pageInfos.push(info)
+          return parsePageInfo(file.path, file.name, content)
         } catch {
-          pageInfos.push({
+          return {
             path: file.path,
             title: file.name.replace(".md", "").replace(/-/g, " "),
             type: "other",
             tags: [],
             sources: [],
-          })
+          }
         }
-      }
+      })
 
-      setPages(pageInfos)
-    } catch {
-      setPages([])
+      // Only apply if this is still the most recent scan — ingest bumps
+      // dataVersion frequently, and a slower earlier scan must not clobber
+      // a newer one with stale results.
+      if (requestId === loadReqIdRef.current) {
+        setPages(pageInfos)
+        setLoading(false)
+      }
+    } catch (err) {
+      if (requestId === loadReqIdRef.current) {
+        setPages([])
+        setScanError(err instanceof Error ? err.message : String(err))
+        setLoading(false)
+      }
     }
   }, [project])
 
-  // Reload when wiki data changes. Do not key this off the visible
-  // sidebar file tree: lazy directory expansion mutates that tree and
-  // should not force a full wiki metadata re-parse.
+  // Reload when wiki data changes. Debounced so a burst of dataVersion bumps
+  // (which happens continuously while the ingester writes pages) collapses
+  // into a single scan after the writes settle, instead of re-scanning the
+  // whole wiki per page and never getting a stable view.
   useEffect(() => {
-    loadPages()
+    const timer = setTimeout(loadPages, 800)
+    return () => clearTimeout(timer)
   }, [loadPages, dataVersion])
 
   useEffect(() => {
@@ -208,7 +240,18 @@ export function KnowledgeTree() {
 
         {sortedGroups.length === 0 && (
           <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t("sidebar.noWikiPages")}
+            {loading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
+                {t("sidebar.loadingWiki", { defaultValue: "Loading wiki pages..." })}
+              </span>
+            ) : scanError ? (
+              <span className="text-destructive">
+                {t("sidebar.wikiLoadFailed", { defaultValue: "Failed to load wiki pages: {{error}}", error: scanError })}
+              </span>
+            ) : (
+              t("sidebar.noWikiPages")
+            )}
           </div>
         )}
 

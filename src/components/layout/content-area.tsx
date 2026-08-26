@@ -8,6 +8,7 @@ import { ReviewView } from "@/components/review/review-view"
 import { LintView } from "@/components/lint/lint-view"
 import { SearchView } from "@/components/search/search-view"
 import { GraphView } from "@/components/graph/graph-view"
+import { HistoryView } from "@/components/history/history-view"
 import { PreviewPanel } from "./preview-panel"
 
 export function ContentArea() {
@@ -63,6 +64,8 @@ function ActiveContent({
       return <SearchView />
     case "graph":
       return <GraphView />
+    case "history":
+      return <HistoryView />
     default:
       return <PreviewPanel />
   }
