@@ -9,6 +9,7 @@ import { LintView } from "@/components/lint/lint-view"
 import { SearchView } from "@/components/search/search-view"
 import { GraphView } from "@/components/graph/graph-view"
 import { HistoryView } from "@/components/history/history-view"
+import { JiraView } from "@/jira/jira-view"
 import { PreviewPanel } from "./preview-panel"
 
 export function ContentArea() {
@@ -66,6 +67,8 @@ function ActiveContent({
       return <GraphView />
     case "history":
       return <HistoryView />
+    case "jira":
+      return <JiraView />
     default:
       return <PreviewPanel />
   }

@@ -15,6 +15,7 @@ import {
   Server,
   Settings,
   FileText,
+  Bug,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { invoke } from "@tauri-apps/api/core"
@@ -22,6 +23,7 @@ import { disable as disableAutostart, enable as enableAutostart } from "@tauri-a
 import i18n from "@/i18n"
 import { Button } from "@/components/ui/button"
 import { useWikiStore } from "@/stores/wiki-store"
+import { useJiraStore } from "@/stores/jira-store"
 import { useChatStore } from "@/stores/chat-store"
 import { useUpdateStore, hasAvailableUpdate } from "@/stores/update-store"
 import { useZoomStore } from "@/stores/zoom-store"
@@ -39,6 +41,7 @@ import { OutputSection } from "./sections/output-section"
 import { InterfaceSection } from "./sections/interface-section"
 import { NetworkSection } from "./sections/network-section"
 import { ScheduledImportSection } from "./sections/scheduled-import-section"
+import { JiraSection } from "./sections/jira-section"
 import { SourceWatchSection } from "./sections/source-watch-section"
 import { MineruSection } from "./sections/mineru-section"
 import { ApiServerSection } from "./sections/api-server-section"
@@ -58,6 +61,7 @@ type CategoryId =
   | "scheduled-import"
   | "mineru"
   | "api-server"
+  | "jira"
   | "output"
   | "interface"
   | "maintenance"
@@ -84,6 +88,7 @@ const CATEGORIES: Category[] = [
   { id: "scheduled-import", labelKey: "settings.categories.scheduledImport", icon: Clock },
   { id: "mineru", labelKey: "settings.categories.mineru", icon: FileText },
   { id: "api-server", labelKey: "settings.categories.apiServer", icon: Server },
+  { id: "jira", labelKey: "settings.categories.jira", icon: Bug },
   { id: "output", labelKey: "settings.categories.output", icon: Languages },
   { id: "interface", labelKey: "settings.categories.interface", icon: Palette },
   { id: "maintenance", labelKey: "settings.categories.maintenance", icon: Wrench },
@@ -101,6 +106,7 @@ function initialDraft(
   sourceWatch: ReturnType<typeof useWikiStore.getState>["sourceWatchConfig"],
   mineru: ReturnType<typeof useWikiStore.getState>["mineruConfig"],
   apiConfig: ReturnType<typeof useWikiStore.getState>["apiConfig"],
+  jiraConfig: ReturnType<typeof useJiraStore.getState>["config"],
   generalConfig: ReturnType<typeof useWikiStore.getState>["generalConfig"],
   maxHistoryMessages: number,
   uiLanguage: string,
@@ -188,6 +194,15 @@ function initialDraft(
     apiAllowLanAccess: apiConfig.allowLanAccess,
     apiMcpEnabled: apiConfig.mcpEnabled,
     apiToken: apiConfig.token,
+    jiraServer: jiraConfig.server,
+    jiraEmail: jiraConfig.email,
+    jiraToken: jiraConfig.token,
+    jiraJql: jiraConfig.jql,
+    jiraImportEnabled: jiraConfig.importEnabled,
+    jiraPollEnabled: jiraConfig.pollEnabled,
+    jiraPollIntervalMinutes: jiraConfig.pollIntervalMinutes,
+    jiraAnalysisLevel: jiraConfig.analysisLevel,
+    jiraRetentionHours: jiraConfig.retentionHours,
     autostart: generalConfig.autostart,
     closeBehavior: generalConfig.closeBehavior,
     uiLanguage,
@@ -220,6 +235,8 @@ export function SettingsView() {
   const setMineruConfig = useWikiStore((s) => s.setMineruConfig)
   const apiConfig = useWikiStore((s) => s.apiConfig)
   const setApiConfig = useWikiStore((s) => s.setApiConfig)
+  const jiraConfig = useJiraStore((s) => s.config)
+  const setJiraConfig = useJiraStore((s) => s.setConfig)
   const generalConfig = useWikiStore((s) => s.generalConfig)
   const setGeneralConfig = useWikiStore((s) => s.setGeneralConfig)
   const maxHistoryMessages = useChatStore((s) => s.maxHistoryMessages)
@@ -249,6 +266,7 @@ export function SettingsView() {
       sourceWatchConfig,
       mineruConfig,
       apiConfig,
+      jiraConfig,
       generalConfig,
       maxHistoryMessages,
       i18n.language,
@@ -308,6 +326,7 @@ export function SettingsView() {
         sourceWatchConfig,
         mineruConfig,
         apiConfig,
+        jiraConfig,
         generalConfig,
         maxHistoryMessages,
         prev.uiLanguage,
@@ -329,6 +348,7 @@ export function SettingsView() {
     sourceWatchConfig,
     mineruConfig,
     apiConfig,
+    jiraConfig,
     generalConfig,
     maxHistoryMessages,
     project,
@@ -365,6 +385,8 @@ export function SettingsView() {
       loadApiConfig,
       saveGeneralConfig,
       loadGeneralConfig,
+      saveJiraConfig,
+      loadJiraConfig,
       saveZoomLevel,
       loadZoomLevel,
       saveBackgroundImage,
@@ -458,6 +480,18 @@ export function SettingsView() {
       autostart: draft.autostart,
       closeBehavior: draft.closeBehavior,
     }
+    const newJiraConfig = {
+      server: draft.jiraServer.trim(),
+      email: draft.jiraEmail.trim(),
+      token: draft.jiraToken,
+      jql: draft.jiraJql.trim(),
+      importEnabled: draft.jiraImportEnabled,
+      pollEnabled: draft.jiraPollEnabled,
+      pollIntervalMinutes: Math.max(1, Math.min(1440, draft.jiraPollIntervalMinutes || 60)),
+      analysisLevel: draft.jiraAnalysisLevel,
+      retentionHours: Math.max(1, Math.min(8760, draft.jiraRetentionHours || 168)),
+      lastPoll: jiraConfig.lastPoll,
+    }
 
     // Push all config values to zustand before any awaited save below. The
     // settings draft resync effect runs after store updates; if any config stays
@@ -475,6 +509,7 @@ export function SettingsView() {
     setMineruConfig(newMineruConfig)
     setApiConfig(newApiConfig)
     setGeneralConfig(newGeneralConfig)
+    setJiraConfig(newJiraConfig)
 
     try {
       await saveLlmConfig(newLlm)
@@ -512,6 +547,13 @@ export function SettingsView() {
       }
 
       await saveMineruConfig(newMineruConfig)
+      await saveJiraConfig(newJiraConfig)
+      try {
+        const { startJiraSync } = await import("@/lib/jira-sync")
+        startJiraSync()
+      } catch (err) {
+        console.warn("[settings] failed to restart Jira sync:", err)
+      }
 
       // The Rust side reads `apiConfig.{enabled,token,mcpEnabled,allowLanAccess}` from this
       // same `app-state.json` via a 5s cache, so saved changes propagate within
@@ -584,6 +626,7 @@ export function SettingsView() {
           persistedMineru,
           persistedApi,
           persistedGeneral,
+          persistedJira,
           persistedZoom,
         ] = await Promise.allSettled([
           loadLlmConfig(),
@@ -596,6 +639,7 @@ export function SettingsView() {
           loadMineruConfig(),
           loadApiConfig(),
           loadGeneralConfig(),
+          loadJiraConfig(),
           loadZoomLevel(),
         ] as const)
         setLlmConfig(resultValue(persistedLlm, null) ?? llmConfig)
@@ -609,6 +653,7 @@ export function SettingsView() {
         setMineruConfig(resultValue(persistedMineru, null) ?? mineruConfig)
         setApiConfig(resultValue(persistedApi, null) ?? apiConfig)
         setGeneralConfig(resultValue(persistedGeneral, generalConfig))
+        setJiraConfig(resultValue(persistedJira, jiraConfig))
         useZoomStore.getState().setLevel(resultValue(persistedZoom, useZoomStore.getState().level))
       } catch (reloadErr) {
         console.warn("[settings] failed to reload persisted settings after save failure:", reloadErr)
@@ -627,6 +672,7 @@ export function SettingsView() {
     scheduledImportConfig,
     mineruConfig,
     apiConfig,
+    jiraConfig,
     generalConfig,
     maxHistoryMessages,
     setLlmConfig,
@@ -638,6 +684,7 @@ export function SettingsView() {
     setSourceWatchConfig,
     setMineruConfig,
     setApiConfig,
+    setJiraConfig,
     setGeneralConfig,
     setMaxHistoryMessages,
     currentTheme,
@@ -668,6 +715,8 @@ export function SettingsView() {
         return <MineruSection draft={draft} setDraft={setDraft} />
       case "api-server":
         return <ApiServerSection draft={draft} setDraft={setDraft} />
+      case "jira":
+        return <JiraSection draft={draft} setDraft={setDraft} />
       case "output":
         return <OutputSection draft={draft} setDraft={setDraft} />
       case "interface":

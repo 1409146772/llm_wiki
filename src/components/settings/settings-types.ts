@@ -1,5 +1,6 @@
 import type { CustomApiMode } from "./llm-presets"
 import type { AzureModelFamily, CloseBehavior, MineruEffort, MineruLocalBackend, MineruModelVersion, MineruParseMethod, ReasoningConfig, SourceWatchConfig } from "@/stores/wiki-store"
+import type { JiraAnalysisLevel } from "@/lib/jira-config"
 
 /**
  * Shape of the draft state each section reads from and writes into.
@@ -108,6 +109,17 @@ export interface SettingsDraft {
   apiAllowLanAccess: boolean
   apiMcpEnabled: boolean
   apiToken: string
+
+  // Jira integration
+  jiraServer: string
+  jiraEmail: string
+  jiraToken: string
+  jiraJql: string
+  jiraImportEnabled: boolean
+  jiraPollEnabled: boolean
+  jiraPollIntervalMinutes: number
+  jiraAnalysisLevel: JiraAnalysisLevel
+  jiraRetentionHours: number
 }
 
 export type DraftSetter = <K extends keyof SettingsDraft>(

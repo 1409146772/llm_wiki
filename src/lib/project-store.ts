@@ -1,6 +1,7 @@
 import { load } from "@tauri-apps/plugin-store"
 import type { WikiProject } from "@/types/wiki"
 import type { ApiConfig, CustomLlmPreset, GeneralConfig, LlmConfig, SearchApiConfig, EmbeddingConfig, MineruConfig, MultimodalConfig, OutputLanguage, ProjectLlmOverride, ProviderConfigs, ProxyConfig, ScheduledImportConfig, SourceWatchConfig, TaskModelRoutingConfig } from "@/stores/wiki-store"
+import { normalizeJiraConfig, type JiraConfig } from "@/lib/jira-config"
 import { normalizeSourceWatchConfig } from "@/lib/source-watch-config"
 import { normalizePath } from "@/lib/path-utils"
 import { DEFAULT_ZOOM_LEVEL, clampZoomLevel } from "@/stores/zoom-store"
@@ -331,6 +332,22 @@ export async function loadGeneralConfig(): Promise<GeneralConfig> {
   const store = await getStore()
   const config = await store.get<Partial<GeneralConfig>>(GENERAL_CONFIG_KEY)
   return normalizeGeneralConfig(config)
+}
+
+const JIRA_CONFIG_KEY = "jiraConfig"
+
+export async function saveJiraConfig(config: JiraConfig): Promise<void> {
+  const store = await getStore()
+  // Force-flush on a security hot path: the token must land on disk even if
+  // the app exits right after saving, mirroring saveApiConfig.
+  await store.set(JIRA_CONFIG_KEY, normalizeJiraConfig(config))
+  await store.save()
+}
+
+export async function loadJiraConfig(): Promise<JiraConfig> {
+  const store = await getStore()
+  const config = await store.get<Partial<JiraConfig>>(JIRA_CONFIG_KEY)
+  return normalizeJiraConfig(config)
 }
 
 const SCHEDULED_IMPORT_KEY_PREFIX = "scheduledImportConfig:"

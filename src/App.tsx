@@ -6,6 +6,7 @@ import i18n from "@/i18n"
 import { useWikiStore } from "@/stores/wiki-store"
 import { useReviewStore } from "@/stores/review-store"
 import { useLintStore } from "@/stores/lint-store"
+import { useJiraStore } from "@/stores/jira-store"
 import { useChatStore } from "@/stores/chat-store"
 import { BASE_FONT_SIZE_PX, useZoomStore } from "@/stores/zoom-store"
 import { openProject } from "@/commands/fs"
@@ -157,6 +158,22 @@ function App() {
       startScheduledIndex(proj)
     } catch (err) {
       console.warn("[startup] failed to hydrate scheduled index:", err)
+    }
+  }
+
+  async function hydrateJiraAfterOpen(proj: WikiProject): Promise<void> {
+    try {
+      const { loadJiraConfig } = await import("@/lib/project-store")
+      const { startJiraSync } = await import("@/lib/jira-sync")
+      if (!isCurrentProject(proj)) return
+      const config = await loadJiraConfig()
+      useJiraStore.getState().setConfig(config)
+      if (!isCurrentProject(proj)) return
+      // Start the poller even when polling is disabled — it only fetches
+      // when the schedule is due; the Jira view uses it for "refresh now".
+      startJiraSync()
+    } catch (err) {
+      console.warn("[startup] failed to hydrate Jira:", err)
     }
   }
 
@@ -591,6 +608,7 @@ function App() {
     void hydrateScheduledImportAfterOpen(proj)
     void hydrateScheduledLintAfterOpen(proj)
     void hydrateScheduledIndexAfterOpen(proj)
+    void hydrateJiraAfterOpen(proj)
     // Heavy side-store hydration happens after the project shell is allowed
     // to render. Each write has a stale-project guard so a fast project switch
     // cannot apply old review/lint/chat state to the new project.

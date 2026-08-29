@@ -14,6 +14,7 @@ import { useLintStore } from "@/stores/lint-store"
 import { useActivityStore } from "@/stores/activity-store"
 import { useResearchStore } from "@/stores/research-store"
 import { useWikiStore } from "@/stores/wiki-store"
+import { useJiraStore } from "@/stores/jira-store"
 
 export async function resetProjectState(): Promise<void> {
   // Zustand stores — clear all per-project data (synchronous)
@@ -55,15 +56,34 @@ export async function resetProjectState(): Promise<void> {
     panelOpen: false,
   })
 
+  // Jira is a per-project feature (ledger + tasks are project-scoped). Clear
+  // the transient caches; the config is global and must survive a switch.
+  useJiraStore.setState({
+    tasks: [],
+    ledger: [],
+    detailTask: null,
+  })
+
   // Module-level caches — load in parallel and clear each, surfacing any
   // failure instead of swallowing it.
-  const [queueMod, dedupQueueMod, graphMod, fileSyncMod, scheduledImportMod] = await Promise.allSettled([
+  const [queueMod, dedupQueueMod, graphMod, fileSyncMod, scheduledImportMod, jiraSyncMod] = await Promise.allSettled([
     import("@/lib/ingest-queue"),
     import("@/lib/dedup-queue"),
     import("@/lib/graph-relevance"),
     import("@/lib/project-file-sync"),
     import("@/lib/scheduled-import"),
+    import("@/lib/jira-sync"),
   ])
+
+  if (jiraSyncMod.status === "fulfilled") {
+    try {
+      jiraSyncMod.value.stopJiraSync()
+    } catch (err) {
+      console.warn("[Reset Project State] stopJiraSync failed:", err)
+    }
+  } else {
+    console.warn("[Reset Project State] Failed to load jira-sync:", jiraSyncMod.reason)
+  }
 
   if (scheduledImportMod.status === "fulfilled") {
     try {
