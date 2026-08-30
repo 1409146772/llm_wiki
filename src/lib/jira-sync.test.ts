@@ -50,6 +50,11 @@ describe("isJiraPollDue", () => {
     expect(isJiraPollDue({ ...DEFAULT_JIRA_CONFIG, pollEnabled: false })).toBe(false)
     expect(isJiraPollDue({ ...DEFAULT_JIRA_CONFIG, importEnabled: false, pollEnabled: true })).toBe(false)
   })
+  it("false when the feature master switch is off", () => {
+    expect(
+      isJiraPollDue({ ...DEFAULT_JIRA_CONFIG, enabled: false, importEnabled: true, pollEnabled: true }),
+    ).toBe(false)
+  })
   it("true when never polled", () => {
     expect(isJiraPollDue({ ...DEFAULT_JIRA_CONFIG, importEnabled: true, pollEnabled: true })).toBe(true)
   })

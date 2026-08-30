@@ -19,6 +19,7 @@ export function JiraSection({ draft, setDraft }: Props) {
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   const buildConfigForTest = (): JiraConfig => ({
+    enabled: draft.jiraEnabled,
     server: normalizeJiraServer(draft.jiraServer),
     email: draft.jiraEmail.trim(),
     token: draft.jiraToken,
@@ -32,6 +33,9 @@ export function JiraSection({ draft, setDraft }: Props) {
   })
 
   const handleTestConnection = async () => {
+    // The whole form is disabled when the master switch is off; belt and
+    // braces so a stale click can never fire a request.
+    if (!draft.jiraEnabled) return
     setTesting(true)
     setTestResult(null)
     try {
@@ -59,6 +63,26 @@ export function JiraSection({ draft, setDraft }: Props) {
           })}
         </p>
       </div>
+
+      {/* Feature master switch — gates the whole form below plus the
+          sidebar entry, the Jira view, and the background poller.
+          (When off: form greyed, sidebar entry hidden, poller stopped,
+          and the Jira view falls back to the wiki panel.) */}
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={draft.jiraEnabled}
+          onChange={(e) => setDraft("jiraEnabled", e.target.checked)}
+          className="h-4 w-4"
+        />
+        <span className="text-sm font-medium">
+          {t("settings.sections.jira.enabled", { defaultValue: "Enable Jira integration" })}
+        </span>
+      </label>
+
+      {/* Disabled-but-visible when the master switch is off: the native
+          fieldset cascade greys every control below. */}
+      <fieldset disabled={!draft.jiraEnabled} className="min-w-0 space-y-6 disabled:opacity-60">
 
       {/* Credentials */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -259,6 +283,7 @@ export function JiraSection({ draft, setDraft }: Props) {
           </p>
         </div>
       )}
+      </fieldset>
     </div>
   )
 }

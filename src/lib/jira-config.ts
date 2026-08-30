@@ -15,6 +15,12 @@
 export type JiraAnalysisLevel = "off" | "basic" | "deep"
 
 export interface JiraConfig {
+  /**
+   * Feature master switch: when false the Jira sidebar entry is hidden,
+   * the poller never runs, and the Jira view/API surfaces are disabled.
+   * Defaults to true so configs saved before this field existed stay on.
+   */
+  enabled: boolean
   /** Jira base URL, e.g. `https://jira.cvte.com` (no trailing `/`). */
   server: string
   /** Jira account email (used only as a display/label hint). */
@@ -23,7 +29,7 @@ export interface JiraConfig {
   token: string
   /** Editable JQL that filters which issues are imported. Default: defects. */
   jql: string
-  /** Master switch: when false, nothing is pulled into the knowledge base. */
+  /** Import-level switch: when false, nothing is pulled into the knowledge base. */
   importEnabled: boolean
   /** Whether the periodic background poll runs at all. */
   pollEnabled: boolean
@@ -46,6 +52,7 @@ export interface JiraConfig {
 }
 
 export const DEFAULT_JIRA_CONFIG: JiraConfig = {
+  enabled: true,
   server: "https://jira.cvte.com",
   email: "",
   token: "",
@@ -86,6 +93,9 @@ export function normalizeJiraServer(value: string): string {
 
 export function normalizeJiraConfig(config?: Partial<JiraConfig> | null): JiraConfig {
   return {
+    // Defaults to true: a config persisted before `enabled` existed must not
+    // silently turn the feature off on upgrade.
+    enabled: config?.enabled !== false,
     server: normalizeJiraServer(config?.server ?? DEFAULT_JIRA_CONFIG.server),
     email: (config?.email ?? DEFAULT_JIRA_CONFIG.email).trim(),
     token: config?.token ?? DEFAULT_JIRA_CONFIG.token,

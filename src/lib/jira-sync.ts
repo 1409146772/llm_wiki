@@ -24,6 +24,7 @@ let polling = false
 
 /** True once the configured cadence has elapsed since the last successful poll. */
 export function isJiraPollDue(config: JiraConfig, now = Date.now()): boolean {
+  if (!config.enabled) return false
   if (!config.importEnabled || !config.pollEnabled) return false
   if (config.pollIntervalMinutes <= 0) return false
   if (config.lastPoll == null) return true
@@ -131,6 +132,7 @@ export async function jiraPoll(projectPath?: string): Promise<void> {
   polling = true
   try {
     const config = await loadJiraConfig()
+    if (!config.enabled) return
     if (!isJiraConfigUsable(config)) return
     if (!config.importEnabled) return
     const tasks = await jiraSearch(config, { jql: config.jql })

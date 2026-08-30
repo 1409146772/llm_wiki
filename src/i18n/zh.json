@@ -957,6 +957,7 @@
       },
       "jira": {
         "title": "Jira",
+        "enabled": "启用 Jira 集成",
         "description": "连接 Jira 服务器，浏览并导入任务到知识库，并用已配置的 LLM 分析任务描述。",
         "server": "服务器地址",
         "email": "账号邮箱",

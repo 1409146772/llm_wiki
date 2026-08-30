@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useWikiStore } from "@/stores/wiki-store"
+import { useJiraStore } from "@/stores/jira-store"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { SettingsView } from "@/components/settings/settings-view"
 import { SkillsSection } from "@/components/settings/sections/skills-section"
@@ -46,6 +47,10 @@ function ActiveContent({
 }: {
   activeView: ReturnType<typeof useWikiStore.getState>["activeView"]
 }) {
+  // Master switch guard: the sidebar coerces activeView away from "jira"
+  // when the feature is disabled, but skip the render for the frame before
+  // that effect lands.
+  const jiraEnabled = useJiraStore((s) => s.config.enabled)
   switch (activeView) {
     case "chat":
       return <ChatPanel />
@@ -68,7 +73,7 @@ function ActiveContent({
     case "history":
       return <HistoryView />
     case "jira":
-      return <JiraView />
+      return jiraEnabled ? <JiraView /> : null
     default:
       return <PreviewPanel />
   }

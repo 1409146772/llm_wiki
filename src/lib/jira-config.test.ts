@@ -7,6 +7,7 @@ import {
   normalizeJiraAnalysisLevel,
   isJiraConfigUsable,
   DEFAULT_JIRA_CONFIG,
+  type JiraConfig,
 } from "./jira-config"
 
 describe("normalizeJiraServer", () => {
@@ -65,6 +66,16 @@ describe("normalizeJiraConfig", () => {
     expect(c.importEnabled).toBe(false)
     const c2 = normalizeJiraConfig({})
     expect(c2.importEnabled).toBe(true)
+  })
+  it("applies enabled (feature master switch) default true", () => {
+    expect(normalizeJiraConfig().enabled).toBe(true)
+    expect(normalizeJiraConfig({ enabled: false }).enabled).toBe(false)
+    expect(normalizeJiraConfig({ enabled: true }).enabled).toBe(true)
+    // Backward compat: a config persisted before `enabled` existed must
+    // normalize to on, not silently disable the feature.
+    const legacy = { ...DEFAULT_JIRA_CONFIG } as Record<string, unknown>
+    delete legacy.enabled
+    expect(normalizeJiraConfig(legacy as Partial<JiraConfig>).enabled).toBe(true)
   })
   it("preserves token and trims email", () => {
     const c = normalizeJiraConfig({ token: "pat-123", email: "  a@b.com " })

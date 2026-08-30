@@ -111,6 +111,8 @@ export interface SettingsDraft {
   apiToken: string
 
   // Jira integration
+  /** Feature master switch: gates sidebar entry, view, and poller. */
+  jiraEnabled: boolean
   jiraServer: string
   jiraEmail: string
   jiraToken: string

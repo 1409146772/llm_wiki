@@ -33,6 +33,10 @@ export function JiraView() {
     setError(null)
     setRefreshing(true)
     try {
+      if (!config.enabled) {
+        setError(t("jira.needConfig", { defaultValue: "Set Jira server and token in Settings to pull issues." }))
+        return
+      }
       if (!isJiraConfigUsable(config)) {
         setError(t("jira.needConfig", { defaultValue: "Set Jira server and token in Settings to pull issues." }))
         return
@@ -46,9 +50,9 @@ export function JiraView() {
     }
   }, [refreshing, config, setTasks, t])
 
-  // Auto-refresh once on mount when credentials exist.
+  // Auto-refresh once on mount when the feature is on and credentials exist.
   useEffect(() => {
-    if (isJiraConfigUsable(config)) {
+    if (config.enabled && isJiraConfigUsable(config)) {
       void refresh()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

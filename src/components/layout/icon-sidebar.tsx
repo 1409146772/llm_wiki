@@ -4,6 +4,7 @@ import {
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useWikiStore } from "@/stores/wiki-store"
+import { useJiraStore } from "@/stores/jira-store"
 import { useFloatingStore } from "@/stores/floating-store"
 import { useReviewStore } from "@/stores/review-store"
 import { useResearchStore } from "@/stores/research-store"
@@ -38,6 +39,12 @@ export function IconSidebar({ onSwitchProject }: IconSidebarProps) {
   const { t } = useTranslation()
   const activeView = useWikiStore((s) => s.activeView)
   const setActiveView = useWikiStore((s) => s.setActiveView)
+  // Jira feature master switch (Settings → Jira). When off, the nav entry
+  // is hidden and any stale activeView is bounced back to the wiki panel.
+  const jiraEnabled = useJiraStore((s) => s.config.enabled)
+  useEffect(() => {
+    if (activeView === "jira" && !jiraEnabled) setActiveView("wiki")
+  }, [activeView, jiraEnabled, setActiveView])
   const pendingCount = useReviewStore((s) => s.items.filter((i) => !i.resolved).length)
   const researchPanelOpen = useResearchStore((s) => s.panelOpen)
   const researchActiveCount = useResearchStore((s) => s.tasks.filter((t) => t.status !== "done" && t.status !== "error").length)
@@ -88,7 +95,7 @@ export function IconSidebar({ onSwitchProject }: IconSidebarProps) {
         </div>
         {/* Top: main nav items + Deep Research */}
         <div className="flex flex-1 flex-col items-center gap-1">
-          {NAV_ITEMS.map(({ view, icon: Icon, labelKey }) => (
+          {NAV_ITEMS.filter(({ view }) => view !== "jira" || jiraEnabled).map(({ view, icon: Icon, labelKey }) => (
             <Tooltip key={view}>
               <TooltipTrigger
                 onClick={() => setActiveView(view)}

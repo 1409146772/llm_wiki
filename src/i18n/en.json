@@ -957,6 +957,7 @@
       },
       "jira": {
         "title": "Jira",
+        "enabled": "Enable Jira integration",
         "description": "Connect a Jira server to browse and import issues into the knowledge base, and analyze descriptions with your configured LLM.",
         "server": "Server URL",
         "email": "Account email",

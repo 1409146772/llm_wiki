@@ -169,9 +169,10 @@ function App() {
       const config = await loadJiraConfig()
       useJiraStore.getState().setConfig(config)
       if (!isCurrentProject(proj)) return
-      // Start the poller even when polling is disabled — it only fetches
-      // when the schedule is due; the Jira view uses it for "refresh now".
-      startJiraSync()
+      // The feature master switch (Settings → Jira) keeps the poller down
+      // entirely when off. When on, start it even if polling is disabled —
+      // it only fetches when the schedule is due.
+      if (config.enabled) startJiraSync()
     } catch (err) {
       console.warn("[startup] failed to hydrate Jira:", err)
     }

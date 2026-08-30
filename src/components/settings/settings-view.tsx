@@ -194,6 +194,7 @@ function initialDraft(
     apiAllowLanAccess: apiConfig.allowLanAccess,
     apiMcpEnabled: apiConfig.mcpEnabled,
     apiToken: apiConfig.token,
+    jiraEnabled: jiraConfig.enabled,
     jiraServer: jiraConfig.server,
     jiraEmail: jiraConfig.email,
     jiraToken: jiraConfig.token,
@@ -481,6 +482,7 @@ export function SettingsView() {
       closeBehavior: draft.closeBehavior,
     }
     const newJiraConfig = {
+      enabled: draft.jiraEnabled,
       server: draft.jiraServer.trim(),
       email: draft.jiraEmail.trim(),
       token: draft.jiraToken,
@@ -549,10 +551,18 @@ export function SettingsView() {
       await saveMineruConfig(newMineruConfig)
       await saveJiraConfig(newJiraConfig)
       try {
-        const { startJiraSync } = await import("@/lib/jira-sync")
-        startJiraSync()
+        const { startJiraSync, stopJiraSync } = await import("@/lib/jira-sync")
+        if (newJiraConfig.enabled) {
+          startJiraSync()
+        } else {
+          stopJiraSync()
+          // Leave a now-unreachable Jira view if the user toggled the
+          // feature off while it was open.
+          const wiki = useWikiStore.getState()
+          if (wiki.activeView === "jira") wiki.setActiveView("wiki")
+        }
       } catch (err) {
-        console.warn("[settings] failed to restart Jira sync:", err)
+        console.warn("[settings] failed to update Jira sync:", err)
       }
 
       // The Rust side reads `apiConfig.{enabled,token,mcpEnabled,allowLanAccess}` from this

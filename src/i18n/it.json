@@ -957,6 +957,7 @@
       },
       "jira": {
         "title": "Jira",
+        "enabled": "Abilita l'integrazione Jira",
         "description": "Connetti un server Jira per consultare e importare i ticket nella knowledge base e analizzarne le descrizioni con il LLM configurato.",
         "server": "URL del server",
         "email": "Email dell'account",
