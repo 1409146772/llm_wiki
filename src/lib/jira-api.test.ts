@@ -3,6 +3,8 @@ import {
   mapJiraIssue,
   jiraSearch,
   jiraTestConnection,
+  jiraIssueTypes,
+  jiraPriorities,
   JiraApiError,
   __testing,
 } from "./jira-api"
@@ -128,5 +130,46 @@ describe("jiraTestConnection", () => {
     const res = await jiraTestConnection(cfg)
     expect(res.ok).toBe(true)
     expect(res.message).toContain("luziyu")
+  })
+})
+
+describe("jiraIssueTypes", () => {
+  it("maps the bare array and filters out subtasks", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        { id: "3", name: "任务", subtask: false },
+        { id: "10602", name: "子任务", subtask: true },
+        { id: "10601", name: "缺陷", subtask: false },
+      ],
+    })
+    const types = await jiraIssueTypes(cfg)
+    expect(types.map((x) => x.name)).toEqual(["任务", "缺陷"])
+    expect(String(mockHttpFetch.mock.calls[0][0])).toContain("/rest/api/2/issuetype")
+  })
+})
+
+describe("jiraPriorities", () => {
+  it("accepts a bare array (this Server)", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [
+        { id: "1", name: "最高" },
+        { id: "3", name: "中" },
+      ],
+    })
+    const prios = await jiraPriorities(cfg)
+    expect(prios.map((x) => x.name)).toEqual(["最高", "中"])
+  })
+  it("accepts the { priorities: [...] } wrapper (Cloud docs)", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ priorities: [{ id: "2", name: "高" }] }),
+    })
+    const prios = await jiraPriorities(cfg)
+    expect(prios.map((x) => x.name)).toEqual(["高"])
   })
 })

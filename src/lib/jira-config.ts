@@ -56,8 +56,8 @@ export const DEFAULT_JIRA_CONFIG: JiraConfig = {
   server: "https://jira.cvte.com",
   email: "",
   token: "",
-  // Defects by default; the user can widen/narrow it in Settings → Jira.
-  jql: "issuetype in (缺陷,Bug) order by updated DESC",
+  // Default to the user's own issues; the builder / JQL can widen it.
+  jql: "assignee = currentUser() order by updated DESC",
   importEnabled: true,
   pollEnabled: false,
   pollIntervalMinutes: 60,

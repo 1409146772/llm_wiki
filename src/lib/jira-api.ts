@@ -203,7 +203,7 @@ export interface JiraSearchOptions {
   fields?: string
 }
 
-const DEFAULT_FIELDS = "summary,status,issuetype,priority,assignee,description,updated,JIRA_URL"
+const DEFAULT_FIELDS = "summary,status,issuetype,priority,assignee,description,updated"
 
 /**
  * Search issues by JQL. Returns up to `maxResults` issues mapped to
@@ -251,6 +251,45 @@ export async function jiraUpdateDescription(
     method: "PUT",
     body: JSON.stringify({ fields: { description } }),
   })
+}
+
+export interface JiraNamedEntity {
+  id: string
+  name: string
+  subtask?: boolean
+}
+
+/**
+ * List issue types for the builder's type dropdown. GET /rest/api/2/issuetype
+ * returns a bare array on Jira Server; subtasks are filtered out (they aren't
+ * standalone query targets).
+ */
+export async function jiraIssueTypes(config: JiraConfig): Promise<JiraNamedEntity[]> {
+  const data = await jiraFetch<unknown>(config, "issuetype")
+  const arr = Array.isArray(data) ? data : []
+  return arr
+    .map((raw) => {
+      const o = raw as { id?: unknown; name?: unknown; subtask?: unknown }
+      return { id: String(o.id ?? ""), name: o.name?.toString() ?? "", subtask: Boolean(o.subtask) }
+    })
+    .filter((t) => t.name && !t.subtask)
+}
+
+/**
+ * List priorities for the builder's priority dropdown. This Server (9.12.1)
+ * returns a bare array; Cloud documents a `{ priorities: [...] }` wrapper —
+ * accept both.
+ */
+export async function jiraPriorities(config: JiraConfig): Promise<JiraNamedEntity[]> {
+  const data = await jiraFetch<unknown>(config, "priority")
+  const wrapped = (data as { priorities?: unknown } | null)?.priorities
+  const arr = Array.isArray(data) ? data : Array.isArray(wrapped) ? wrapped : []
+  return arr
+    .map((raw) => {
+      const o = raw as { id?: unknown; name?: unknown }
+      return { id: String(o.id ?? ""), name: o.name?.toString() ?? "" }
+    })
+    .filter((p) => p.name)
 }
 
 /** Validate credentials + server reachability with a lightweight call. */

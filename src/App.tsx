@@ -169,6 +169,15 @@ function App() {
       const config = await loadJiraConfig()
       useJiraStore.getState().setConfig(config)
       if (!isCurrentProject(proj)) return
+      // Hydrate the per-project ledger so cached AI analyses render
+      // immediately on open — otherwise the detail pane shows "analysis not
+      // available" until a background poll happens to run (polling is off by
+      // default). resetProjectState already cleared any previous project's
+      // ledger, so replacing here is safe.
+      const { loadJiraLedger } = await import("@/lib/jira-persist")
+      const entries = await loadJiraLedger(proj.path)
+      if (!isCurrentProject(proj)) return
+      useJiraStore.getState().setLedger(entries)
       // The feature master switch (Settings → Jira) keeps the poller down
       // entirely when off. When on, start it even if polling is disabled —
       // it only fetches when the schedule is due.

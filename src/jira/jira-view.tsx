@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -7,10 +7,15 @@ import { useJiraStore, type JiraTask } from "@/stores/jira-store"
 import { useWikiStore } from "@/stores/wiki-store"
 import { jiraSearch, JiraApiError } from "@/lib/jira-api"
 import { isJiraConfigUsable } from "@/lib/jira-config"
+import { applyJiraScope, type JiraScope } from "@/lib/jira-jql"
+import { reconcileTasks } from "@/lib/jira-sync"
 import { JiraTaskList } from "./jira-task-list"
 import { JiraTaskDetail } from "./jira-task-detail"
 
 type Mode = "list" | "detail" | "history"
+
+const SELECT_CLASS =
+  "h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 export function JiraView() {
   const { t } = useTranslation()
@@ -23,6 +28,10 @@ export function JiraView() {
   const [mode, setMode] = useState<Mode>("list")
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Query-level scope (re-queries Jira) + local list filters (no re-query).
+  const [scope, setScope] = useState<JiraScope>("all")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [priorityFilter, setPriorityFilter] = useState("all")
 
   // Show detail view as soon as a task is selected.
   const detailTask = useJiraStore((s) => s.detailTask)
@@ -41,21 +50,38 @@ export function JiraView() {
         setError(t("jira.needConfig", { defaultValue: "Set Jira server and token in Settings to pull issues." }))
         return
       }
-      const result = await jiraSearch(config, { jql: config.jql })
+      const result = await jiraSearch(config, { jql: applyJiraScope(config.jql, scope) })
       setTasks(result)
+      // Merge into the per-project ledger (dedup / TTL / cached-analysis
+      // hydration) WITHOUT firing a batch of LLM calls — those happen
+      // on-demand when a specific issue is opened. Best-effort.
+      const proj = useWikiStore.getState().project
+      if (proj) {
+        void reconcileTasks(proj.path, result, config.analysisLevel, {
+          analyze: false,
+          retentionHours: config.retentionHours,
+        }).catch((err) => console.warn("[jira] refresh reconcile failed:", err))
+      }
     } catch (err) {
       setError(err instanceof JiraApiError ? err.message : String(err))
     } finally {
       setRefreshing(false)
     }
-  }, [refreshing, config, setTasks, t])
+  }, [refreshing, config, setTasks, t, scope])
 
-  // Auto-refresh once on mount when the feature is on and credentials exist.
+  // Auto-refresh on mount and whenever the scope changes.
   useEffect(() => {
     if (config.enabled && isJiraConfigUsable(config)) {
       void refresh()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope])
+
+  const onScopeChange = useCallback((s: JiraScope) => {
+    setScope(s)
+    // New query → previous local filters may no longer apply; reset them.
+    setTypeFilter("all")
+    setPriorityFilter("all")
   }, [])
 
   const openTask = useCallback((task: JiraTask) => {
@@ -70,6 +96,25 @@ export function JiraView() {
   const goToSettings = useCallback(() => {
     useWikiStore.getState().setActiveView("settings")
   }, [])
+
+  // Filter options derived from the fetched list (local filtering only).
+  const typeOptions = useMemo(
+    () => Array.from(new Set(tasks.map((x) => x.type).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh")),
+    [tasks],
+  )
+  const priorityOptions = useMemo(
+    () => Array.from(new Set(tasks.map((x) => x.priority).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh")),
+    [tasks],
+  )
+  const visibleTasks = useMemo(
+    () =>
+      tasks.filter(
+        (x) =>
+          (typeFilter === "all" || x.type === typeFilter) &&
+          (priorityFilter === "all" || x.priority === priorityFilter),
+      ),
+    [tasks, typeFilter, priorityFilter],
+  )
 
   // History view: filter ledger to resolved-unimported entries within
   // retention (they are the "past but not discarded" records).
@@ -108,6 +153,56 @@ export function JiraView() {
         )}
       </div>
 
+      {/* Filter bar (list mode only) */}
+      {activeMode === "list" && mode === "list" && (
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+          <div className="flex items-center gap-1">
+            {(["assignee", "reporter", "all"] as JiraScope[]).map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={scope === s ? "secondary" : "ghost"}
+                onClick={() => onScopeChange(s)}
+                title={s === "all" ? t("jira.scopeAllHint", { defaultValue: "Run the query as written in Settings" }) : undefined}
+              >
+                {s === "assignee"
+                  ? t("jira.scopeAssignedToMe", { defaultValue: "Assigned to me" })
+                  : s === "reporter"
+                    ? t("jira.scopeReportedByMe", { defaultValue: "Reported by me" })
+                    : t("jira.scopeAll", { defaultValue: "All" })}
+              </Button>
+            ))}
+          </div>
+          <div className="flex-1" />
+          <select
+            aria-label={t("jira.filterType", { defaultValue: "Filter by type" })}
+            className={SELECT_CLASS}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">{t("jira.filterType", { defaultValue: "Filter by type" })}</option>
+            {typeOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={t("jira.filterPriority", { defaultValue: "Filter by priority" })}
+            className={SELECT_CLASS}
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+          >
+            <option value="all">{t("jira.filterPriority", { defaultValue: "Filter by priority" })}</option>
+            {priorityOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Error / not configured */}
       {error && (
         <div className="flex items-center justify-between gap-2 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
@@ -143,7 +238,7 @@ export function JiraView() {
             </ul>
           )
         ) : (
-          <JiraTaskList tasks={tasks} onOpen={openTask} />
+          <JiraTaskList tasks={visibleTasks} onOpen={openTask} />
         )}
       </ScrollArea>
 

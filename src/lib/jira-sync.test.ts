@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { upsertLedgerForTask, reconcileTasks, isJiraPollDue } from "./jira-sync"
 import { DEFAULT_JIRA_CONFIG, type JiraConfig } from "./jira-config"
+import { analyzeJiraTask } from "./jira-analyze"
 import { useJiraStore, type JiraTask } from "@/stores/jira-store"
 
 // jira-sync imports project-store (app-state.json via plugin-store) and
@@ -118,5 +119,59 @@ describe("reconcileTasks", () => {
     const keys = useJiraStore.getState().ledger.map((e) => e.key)
     expect(keys).not.toContain("X-1")
     expect(keys).toContain("Y-1")
+  })
+
+  it("analyze:false merges the ledger without invoking the LLM", async () => {
+    const mock = analyzeJiraTask as ReturnType<typeof vi.fn>
+    mock.mockClear()
+    useJiraStore.setState({ tasks: [], ledger: [], detailTask: null })
+    await reconcileTasks("C:\\proj", [task({ key: "A-1", updated: 5 })], "basic", { analyze: false })
+    const state = useJiraStore.getState()
+    expect(state.tasks).toHaveLength(1)
+    expect(state.ledger).toHaveLength(1)
+    expect(state.ledger[0].analysis).toBeUndefined()
+    expect(mock).not.toHaveBeenCalled()
+  })
+
+  it("forceRetryErrors re-runs analysis on a sticky cached error; default does not", async () => {
+    const mock = analyzeJiraTask as ReturnType<typeof vi.fn>
+    const seedLedger = () =>
+      useJiraStore.setState({
+        tasks: [],
+        detailTask: null,
+        ledger: [
+          {
+            key: "E-1",
+            imported: false,
+            firstSeen: 1,
+            resolvedAt: null,
+            retainedUntil: null,
+            lastAnalyzedUpdated: 7,
+            analysisError: "boom",
+          },
+        ],
+      })
+    // `updated` is unchanged (7), so a normal reconcile must NOT retry.
+    mock.mockClear()
+    seedLedger()
+    await reconcileTasks("C:\\proj", [task({ key: "E-1", updated: 7 })], "basic")
+    expect(mock).not.toHaveBeenCalled()
+    // forceRetryErrors retries despite the unchanged timestamp.
+    mock.mockClear()
+    seedLedger()
+    await reconcileTasks("C:\\proj", [task({ key: "E-1", updated: 7 })], "basic", {
+      forceRetryErrors: true,
+    })
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("upsertLedgerForTask retention hours", () => {
+  it("treats retentionHours as HOURS (regression: was misread as days)", () => {
+    const before = Date.now()
+    const entry = upsertLedgerForTask(task({ key: "R-1", resolved: true }), undefined, 2)
+    const ms = (entry.retainedUntil as number) - before
+    expect(ms).toBeGreaterThanOrEqual(2 * 3_600_000 - 50)
+    expect(ms).toBeLessThanOrEqual(2 * 3_600_000 + 500)
   })
 })
