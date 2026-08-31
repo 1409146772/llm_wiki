@@ -1308,6 +1308,7 @@
     "historyEntry": "resolved, {{hours}}h until discard",
     "config": "Open Jira settings",
     "hasAnalysis": "AI analyzed",
+    "analysisFailed": "Analysis failed",
     "imported": "In wiki",
     "description": "Description",
     "noDescription": "No description.",
@@ -1329,7 +1330,7 @@
     "analysisError": {
       "off": "AI analysis is disabled.",
       "noLlm": "No usable LLM is configured. Analysis skipped.",
-      "empty": "The model returned an empty response. Try again or increase the model's output budget.",
+      "empty": "The model returned no content. Retrying automatically uses a larger output budget; if it keeps failing, switch the model routed to Ingest tasks in Settings.",
       "truncated": "The model's response was cut off before a complete JSON object. Try again.",
       "noJson": "Analysis returned an unexpected response; no JSON found.",
       "network": "Network error reaching the LLM during analysis."

@@ -113,7 +113,7 @@ export function JiraTaskDetail({ onBack }: Props) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <Button variant="ghost" size="icon" onClick={onBack} title={t("jira.back", { defaultValue: "Back" })}>
@@ -132,7 +132,7 @@ export function JiraTaskDetail({ onBack }: Props) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1 overflow-hidden">
         <div className="space-y-6 px-4 py-4">
           {/* Description */}
           <section>
@@ -176,6 +176,13 @@ export function JiraTaskDetail({ onBack }: Props) {
                   {t("jira.confidence", { defaultValue: "Confidence: {{level}}", level: analysis.confidence })}
                 </p>
               </div>
+            ) : analyzing ? (
+              // `analyzing` outranks `analysisError`: while a Retry is in
+              // flight, show live progress instead of the stale error.
+              <p className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t("jira.analyzing", { defaultValue: "Analyzing…" })}
+              </p>
             ) : analysisError ? (
               <div className="flex items-start justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
                 <span>{analysisErrorText}</span>
@@ -184,19 +191,13 @@ export function JiraTaskDetail({ onBack }: Props) {
                     variant="ghost"
                     size="sm"
                     className="h-6 shrink-0 gap-1 px-2 text-xs"
-                    disabled={analyzing}
                     onClick={() => void runAnalysis(detailTask, true)}
                   >
-                    <RotateCw className={`h-3 w-3 ${analyzing ? "animate-spin" : ""}`} />
+                    <RotateCw className="h-3 w-3" />
                     {t("jira.retryAnalysis", { defaultValue: "Retry" })}
                   </Button>
                 )}
               </div>
-            ) : analyzing ? (
-              <p className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t("jira.analyzing", { defaultValue: "Analyzing…" })}
-              </p>
             ) : analysisOff ? (
               <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 {t("jira.analysisDisabled", { defaultValue: "AI analysis is turned off. Enable an analysis level in Settings → Jira." })}

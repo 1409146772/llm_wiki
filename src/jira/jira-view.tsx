@@ -305,34 +305,39 @@ export function JiraView() {
         </div>
       )}
 
-      {/* Body */}
-      <ScrollArea className="flex-1">
-        {activeMode === "detail" ? (
-          <JiraTaskDetail onBack={goBack} />
-        ) : mode === "history" ? (
-          historyEntries.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <Inbox className="mb-2 h-8 w-8 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">
-                {t("jira.historyEmpty", { defaultValue: "No resolved-unimported issues in retention." })}
-              </p>
-            </div>
+      {/* Body — detail renders as a direct flex child (it owns its own scroll
+          region); list/history scroll inside a min-h-0 constrained ScrollArea,
+          the same pattern as sources-view. Without min-h-0 the flex item grows
+          to its content height and nothing scrolls (ancestors clip overflow). */}
+      {activeMode === "detail" ? (
+        <JiraTaskDetail onBack={goBack} />
+      ) : (
+        <ScrollArea className="min-h-0 flex-1 overflow-hidden">
+          {mode === "history" ? (
+            historyEntries.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <Inbox className="mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">
+                  {t("jira.historyEmpty", { defaultValue: "No resolved-unimported issues in retention." })}
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {historyEntries.map((entry) => (
+                  <li key={entry.key} className="flex items-center justify-between px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs text-muted-foreground">{entry.key}</span>
+                      <span className="ml-2 truncate">{t("jira.historyEntry", { defaultValue: "resolved, waiting {{hours}}h retention", hours: Math.max(0, Math.ceil(((entry.retainedUntil ?? Date.now()) - Date.now()) / 3600000)) })}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
           ) : (
-            <ul className="divide-y divide-border">
-              {historyEntries.map((entry) => (
-                <li key={entry.key} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <div className="min-w-0">
-                    <span className="font-mono text-xs text-muted-foreground">{entry.key}</span>
-                    <span className="ml-2 truncate">{t("jira.historyEntry", { defaultValue: "resolved, waiting {{hours}}h retention", hours: Math.max(0, Math.ceil(((entry.retainedUntil ?? Date.now()) - Date.now()) / 3600000)) })}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : (
-          <JiraTaskList tasks={tasks} onOpen={openTask} />
-        )}
-      </ScrollArea>
+            <JiraTaskList tasks={tasks} onOpen={openTask} />
+          )}
+        </ScrollArea>
+      )}
 
       {!project && activeMode !== "detail" && (
         <div className="border-t px-4 py-2 text-xs text-muted-foreground">

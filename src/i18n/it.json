@@ -1308,6 +1308,7 @@
     "historyEntry": "risolto, {{hours}} ore allo scarto",
     "config": "Apri le impostazioni Jira",
     "hasAnalysis": "Analizzato AI",
+    "analysisFailed": "Analisi fallita",
     "imported": "Nella wiki",
     "description": "Descrizione",
     "noDescription": "Nessuna descrizione.",
@@ -1329,7 +1330,7 @@
     "analysisError": {
       "off": "Analisi AI disabilitata.",
       "noLlm": "Nessun LLM configurato. Analisi saltata.",
-      "empty": "Il modello ha restituito una risposta vuota. Riprova o aumenta il budget di output del modello.",
+      "empty": "Il modello ha restituito una risposta vuota. Il nuovo tentativo usa automaticamente un budget di output maggiore; se il problema persiste, cambia il modello assegnato ai task Ingest nelle Impostazioni.",
       "truncated": "La risposta del modello è stata interrotta prima di un oggetto JSON completo. Riprova.",
       "noJson": "L'analisi ha restituito una risposta inattesa; nessun JSON trovato.",
       "network": "Errore di rete nel raggiungere l'LLM durante l'analisi."

@@ -91,8 +91,17 @@ export const useJiraStore = create<JiraState>((set) => ({
                 // reset by a later poll.
                 imported: item.imported || entry.imported,
                 analysis: entry.analysis ?? item.analysis,
-                analysisError: entry.analysisError ?? item.analysisError,
-                analysisErrorCode: entry.analysisErrorCode ?? item.analysisErrorCode,
+                // A fresh successful analysis supersedes any cached error.
+                // `entry.analysisError ?? item.analysisError` could never
+                // clear the stale value (the caller passes `undefined` on
+                // success), so an old failure would linger next to a valid
+                // analysis and mislabel the issue forever.
+                analysisError: entry.analysis
+                  ? undefined
+                  : entry.analysisError ?? item.analysisError,
+                analysisErrorCode: entry.analysis
+                  ? undefined
+                  : entry.analysisErrorCode ?? item.analysisErrorCode,
                 resolvedAt: entry.resolvedAt ?? item.resolvedAt,
                 retainedUntil: entry.retainedUntil ?? item.retainedUntil,
                 lastAnalyzedUpdated: entry.lastAnalyzedUpdated ?? item.lastAnalyzedUpdated,

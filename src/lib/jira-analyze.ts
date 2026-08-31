@@ -24,6 +24,12 @@ import { resolveIngestReasoning } from "@/lib/reasoning-capabilities"
  *  can be long (CJK ≈ 1 token/char); 700 truncated the JSON mid-object. */
 export const ANALYSIS_MAX_TOKENS = 2048
 
+/** Budget for the automatic retry after a parse failure. Some endpoints
+ *  produce an empty reply when the output budget is too tight (e.g. hidden
+ *  thinking tokens competing with the answer); retrying with identical
+ *  parameters just reproduces the failure, so the retry doubles the cap. */
+export const RETRY_MAX_TOKENS = ANALYSIS_MAX_TOKENS * 2
+
 /** Stable error codes so the UI can localize (`jira.analysisError.<code>`)
  *  while the ledger keeps a free-form English `reason` for logs. */
 export type JiraAnalysisErrorCode =
@@ -174,6 +180,7 @@ export async function completeLlm(
   config: LlmConfig,
   system: string,
   user: string,
+  maxTokens: number = ANALYSIS_MAX_TOKENS,
 ): Promise<string> {
   let content = ""
   let errorMessage: string | null = null
@@ -192,7 +199,7 @@ export async function completeLlm(
     // Reasoning follows the ingest routing setting (default off) like every
     // other structured caller — "auto" let thinking models burn the output
     // budget on chain-of-thought and truncate the JSON.
-    { max_tokens: ANALYSIS_MAX_TOKENS, reasoning: resolveIngestReasoning(config) },
+    { max_tokens: maxTokens, reasoning: resolveIngestReasoning(config) },
   )
   if (errorMessage) throw new Error(errorMessage)
   return content
@@ -207,8 +214,9 @@ const RETRY_SUFFIX = `\n\n## Retry\nYour previous reply could not be parsed as J
 async function attemptAnalysis(
   config: LlmConfig,
   user: string,
+  maxTokens: number = ANALYSIS_MAX_TOKENS,
 ): Promise<ParseOutcome> {
-  const raw = await completeLlm(config, SYSTEM_PROMPT, user)
+  const raw = await completeLlm(config, SYSTEM_PROMPT, user, maxTokens)
   return parseAnalysisJson(raw)
 }
 
@@ -246,9 +254,12 @@ export async function analyzeJiraTask(
   try {
     let outcome = await attemptAnalysis(config, user)
     if ("analysis" in outcome) return outcome.analysis
-    // Unparsable reply — retry once with an explicit "JSON only" reminder.
-    // Models drift more on long CJK descriptions than they refuse.
-    const retry = await attemptAnalysis(config, `${user}${RETRY_SUFFIX}`)
+    // Unparsable reply — retry once with an explicit "JSON only" reminder
+    // and a larger output budget (an identical call would deterministically
+    // reproduce the failure — e.g. empty replies when the budget is too
+    // tight for a thinking endpoint). Models drift more on long CJK
+    // descriptions than they refuse.
+    const retry = await attemptAnalysis(config, `${user}${RETRY_SUFFIX}`, RETRY_MAX_TOKENS)
     if ("analysis" in retry) return retry.analysis
     return { reason: PARSE_ERROR_REASONS[retry.code], code: retry.code }
   } catch (err) {

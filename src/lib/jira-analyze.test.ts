@@ -4,6 +4,7 @@ import {
   buildAnalysisPrompt,
   analyzeJiraTask,
   ANALYSIS_MAX_TOKENS,
+  RETRY_MAX_TOKENS,
   type JiraAnalysisResult,
   type ParseOutcome,
 } from "./jira-analyze"
@@ -173,6 +174,19 @@ describe("analyzeJiraTask", () => {
     expect(retryUserMsg).toContain("could not be parsed as JSON")
     // The system prompt stays untouched between attempts.
     expect(calls[1].messages[0].content).toBe(calls[0].messages[0].content)
+  })
+
+  it("escalates the output budget on the automatic retry", async () => {
+    replies = ["", VALID_JSON]
+    await analyzeJiraTask(task(), { llmConfig: usableLlm as never })
+    expect(calls).toHaveLength(2)
+    const first = calls[0].overrides as { max_tokens: number }
+    const second = calls[1].overrides as { max_tokens: number }
+    expect(first.max_tokens).toBe(ANALYSIS_MAX_TOKENS)
+    // An identical retry deterministically reproduces an empty reply, so
+    // the second attempt must ask for more output budget.
+    expect(second.max_tokens).toBe(RETRY_MAX_TOKENS)
+    expect(RETRY_MAX_TOKENS).toBeGreaterThan(ANALYSIS_MAX_TOKENS)
   })
 
   it("returns the retry's failure classification when both attempts are bad", async () => {

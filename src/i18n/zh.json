@@ -1308,6 +1308,7 @@
     "historyEntry": "已解决，{{hours}} 小时后丢弃",
     "config": "打开 Jira 设置",
     "hasAnalysis": "AI 已分析",
+    "analysisFailed": "分析失败",
     "imported": "已在 Wiki",
     "description": "描述",
     "noDescription": "无描述。",
@@ -1329,7 +1330,7 @@
     "analysisError": {
       "off": "AI 分析已关闭。",
       "noLlm": "未配置可用的 LLM，已跳过分析。",
-      "empty": "模型返回了空响应。请重试，或调大模型输出上限。",
+      "empty": "模型返回了空响应。重试会自动调大输出上限；如仍失败，请在设置中更换 Ingest 任务路由使用的模型。",
       "truncated": "模型响应在生成完整 JSON 前被截断。请重试。",
       "noJson": "分析返回了无法解析的响应（未找到 JSON）。",
       "network": "分析时连接 LLM 的网络错误。"

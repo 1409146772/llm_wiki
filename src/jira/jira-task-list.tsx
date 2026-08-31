@@ -31,7 +31,11 @@ export function JiraTaskList({ tasks, onOpen }: Props) {
     <ul className="divide-y divide-border">
       {tasks.map((task) => {
         const entry = ledger.find((item) => item.key === task.key)
-        const hasAnalysis = Boolean(entry?.analysis) || Boolean(entry?.analysisError)
+        // Only a real analysis counts as "AI analyzed". A cached analysis
+        // error (e.g. empty model response) must not masquerade as success —
+        // it gets its own "failed" badge so the user knows to retry.
+        const hasAnalysis = Boolean(entry?.analysis)
+        const analysisFailed = !hasAnalysis && Boolean(entry?.analysisError)
         const imported = Boolean(entry?.imported)
         return (
           <li key={task.key}>
@@ -53,6 +57,11 @@ export function JiraTaskList({ tasks, onOpen }: Props) {
                   {hasAnalysis && (
                     <span className="text-blue-500">
                       {t("jira.hasAnalysis", { defaultValue: "AI analyzed" })}
+                    </span>
+                  )}
+                  {analysisFailed && (
+                    <span className="text-amber-500">
+                      {t("jira.analysisFailed", { defaultValue: "Analysis failed" })}
                     </span>
                   )}
                   {imported && (
