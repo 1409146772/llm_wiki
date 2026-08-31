@@ -121,6 +121,19 @@ describe("reconcileTasks", () => {
     expect(keys).toContain("Y-1")
   })
 
+  it("carries the analysis error code onto the ledger entry", async () => {
+    const mock = analyzeJiraTask as ReturnType<typeof vi.fn>
+    mock.mockClear()
+    // One-shot failure; the module-level success stub stays for other tests.
+    mock.mockResolvedValueOnce({ reason: "The model's response was cut off", code: "truncated" })
+    useJiraStore.setState({ tasks: [], ledger: [], detailTask: null })
+    await reconcileTasks("C:\\proj", [task({ key: "T-9", updated: 5 })], "basic")
+    const entry = useJiraStore.getState().ledger.find((e) => e.key === "T-9")
+    expect(entry?.analysis).toBeUndefined()
+    expect(entry?.analysisError).toContain("cut off")
+    expect(entry?.analysisErrorCode).toBe("truncated")
+  })
+
   it("analyze:false merges the ledger without invoking the LLM", async () => {
     const mock = analyzeJiraTask as ReturnType<typeof vi.fn>
     mock.mockClear()

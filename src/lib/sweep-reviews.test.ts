@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { extractJsonObject } from "./sweep-reviews"
+import { extractJsonObject } from "./json-extract"
 
 describe("extractJsonObject", () => {
   describe("bare JSON", () => {

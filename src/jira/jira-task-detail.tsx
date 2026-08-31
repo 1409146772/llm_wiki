@@ -50,9 +50,11 @@ export function JiraTaskDetail({ onBack }: Props) {
       if ("issues" in result) {
         entry.analysis = result
         entry.analysisError = undefined
+        entry.analysisErrorCode = undefined
       } else {
         entry.analysis = undefined
         entry.analysisError = result.reason
+        entry.analysisErrorCode = result.code
       }
       entry.lastAnalyzedUpdated = task.updated
       useJiraStore.getState().upsertLedger(entry)
@@ -80,6 +82,13 @@ export function JiraTaskDetail({ onBack }: Props) {
   const entry = ledger.find((item) => item.key === detailTask.key)
   const analysis = entry?.analysis
   const analysisError = entry?.analysisError
+  const analysisErrorCode = entry?.analysisErrorCode
+  // Known codes localize; free-form transport errors (code "error", or old
+  // ledger rows without a code) show the stored English string verbatim.
+  const analysisErrorText =
+    analysisErrorCode && analysisErrorCode !== "error"
+      ? t(`jira.analysisError.${analysisErrorCode}`, { defaultValue: analysisError })
+      : analysisError
   const imported = Boolean(entry?.imported)
   const analysisOff = config.analysisLevel === "off"
 
@@ -169,7 +178,7 @@ export function JiraTaskDetail({ onBack }: Props) {
               </div>
             ) : analysisError ? (
               <div className="flex items-start justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-                <span>{analysisError}</span>
+                <span>{analysisErrorText}</span>
                 {!analysisOff && (
                   <Button
                     variant="ghost"

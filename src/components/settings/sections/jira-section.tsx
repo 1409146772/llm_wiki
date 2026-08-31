@@ -1,35 +1,22 @@
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Wifi, WifiOff, AlertTriangle } from "lucide-react"
 import type { SettingsDraft, DraftSetter } from "../settings-types"
-import { jiraTestConnection, jiraIssueTypes, jiraPriorities, type JiraNamedEntity } from "@/lib/jira-api"
+import { jiraTestConnection } from "@/lib/jira-api"
 import { normalizeJiraServer, type JiraConfig } from "@/lib/jira-config"
-import { buildJiraJql, parseJiraJql, type JiraScope } from "@/lib/jira-jql"
 
 interface Props {
   draft: SettingsDraft
   setDraft: DraftSetter
 }
 
-// Fallback option lists (used when the server isn't reachable / no creds).
-// Mirrors the real issue types + priorities on the target Jira instance.
-const STATIC_JIRA_TYPES = ["任务", "缺陷", "项目任务", "测试任务", "需求", "Epic", "设计", "风险"]
-const STATIC_JIRA_PRIORITIES = ["最高", "高", "较高", "中", "低", "最低"]
-
-const CONTROL_CLASS =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-
 export function JiraSection({ draft, setDraft }: Props) {
   const { t } = useTranslation()
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
-  const [serverTypes, setServerTypes] = useState<JiraNamedEntity[]>([])
-  const [serverPrios, setServerPrios] = useState<JiraNamedEntity[]>([])
-  const [usingFallback, setUsingFallback] = useState(false)
-  const credRef = useRef("")
 
   const buildConfigForTest = (): JiraConfig => ({
     enabled: draft.jiraEnabled,
@@ -62,45 +49,6 @@ export function JiraSection({ draft, setDraft }: Props) {
   }
 
   const hasCredentials = Boolean(draft.jiraServer.trim() && draft.jiraToken.trim())
-
-  // Pull real issue types / priorities once credentials settle. Failures fall
-  // back to the static lists silently — never throw out of the effect.
-  useEffect(() => {
-    const server = normalizeJiraServer(draft.jiraServer)
-    const token = draft.jiraToken.trim()
-    if (!server || !token) {
-      setServerTypes([])
-      setServerPrios([])
-      setUsingFallback(false)
-      return
-    }
-    const key = `${server}|${token}`
-    if (credRef.current === key) return
-    let cancelled = false
-    const cfg = buildConfigForTest()
-    Promise.all([jiraIssueTypes(cfg).catch(() => null), jiraPriorities(cfg).catch(() => null)]).then(
-      ([types, prios]) => {
-        if (cancelled) return
-        credRef.current = key
-        if (types && types.length) setServerTypes(types)
-        if (prios && prios.length) setServerPrios(prios)
-        setUsingFallback(!types || !types.length || !prios || !prios.length)
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.jiraServer, draft.jiraToken])
-
-  const parsed = useMemo(() => parseJiraJql(draft.jiraJql), [draft.jiraJql])
-  const typeNames = serverTypes.length ? serverTypes.map((x) => x.name) : STATIC_JIRA_TYPES
-  const prioNames = serverPrios.length ? serverPrios.map((x) => x.name) : STATIC_JIRA_PRIORITIES
-  const builderDisabled = !draft.jiraImportEnabled || parsed.custom
-
-  const applyFilters = (over: Partial<Pick<ReturnType<typeof parseJiraJql>, "scope" | "types" | "priorities">>) => {
-    setDraft("jiraJql", buildJiraJql({ scope: parsed.scope, types: parsed.types, priorities: parsed.priorities, ...over }))
-  }
 
   return (
     <div className="space-y-6">
@@ -206,7 +154,7 @@ export function JiraSection({ draft, setDraft }: Props) {
         )}
       </div>
 
-      {/* Default import + filter builder */}
+      {/* Default import */}
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
@@ -218,129 +166,11 @@ export function JiraSection({ draft, setDraft }: Props) {
           {t("settings.sections.jira.importEnabled", { defaultValue: "Import Jira issues by default" })}
         </span>
       </label>
-
-      <div className="space-y-3 rounded-md border p-4">
-        <div className="flex items-center gap-2">
-          <Label>{t("settings.sections.jira.filters", { defaultValue: "Issue filters" })}</Label>
-          {parsed.custom && (
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
-              {t("settings.sections.jira.customQuery", { defaultValue: "Custom JQL" })}
-            </span>
-          )}
-        </div>
-        {parsed.custom && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.sections.jira.customQueryHelp", {
-              defaultValue: "This query uses conditions the visual builder can't represent. Edit it under Advanced below; the builder re-syncs once it's parseable.",
-            })}
-          </p>
-        )}
-        {usingFallback && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.sections.jira.optionsFallback", {
-              defaultValue: "Showing a built-in option list — connect to your Jira server to load its real issue types and priorities.",
-            })}
-          </p>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <Label htmlFor="jira-filter-scope" className="text-xs text-muted-foreground">
-              {t("settings.sections.jira.filterScope", { defaultValue: "Owner" })}
-            </Label>
-            <select
-              id="jira-filter-scope"
-              className={CONTROL_CLASS}
-              disabled={builderDisabled}
-              value={parsed.scope}
-              onChange={(e) => applyFilters({ scope: e.target.value as JiraScope })}
-            >
-              <option value="assignee">{t("settings.sections.jira.scopeAssignee", { defaultValue: "Assigned to me" })}</option>
-              <option value="reporter">{t("settings.sections.jira.scopeReporter", { defaultValue: "Reported by me" })}</option>
-              <option value="all">{t("settings.sections.jira.scopeAll", { defaultValue: "Everyone" })}</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="jira-filter-types" className="text-xs text-muted-foreground">
-              {t("settings.sections.jira.filterTypes", { defaultValue: "Issue types" })}
-            </Label>
-            <select
-              id="jira-filter-types"
-              className={CONTROL_CLASS + " h-auto py-1"}
-              multiple
-              size={5}
-              disabled={builderDisabled}
-              value={parsed.types}
-              onChange={(e) => applyFilters({ types: Array.from(e.target.selectedOptions).map((o) => o.value) })}
-            >
-              {typeNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="jira-filter-prios" className="text-xs text-muted-foreground">
-              {t("settings.sections.jira.filterPriorities", { defaultValue: "Priorities" })}
-            </Label>
-            <select
-              id="jira-filter-prios"
-              className={CONTROL_CLASS + " h-auto py-1"}
-              multiple
-              size={5}
-              disabled={builderDisabled}
-              value={parsed.priorities}
-              onChange={(e) => applyFilters({ priorities: Array.from(e.target.selectedOptions).map((o) => o.value) })}
-            >
-              {prioNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Advanced: raw JQL, kept in sync with the builder */}
-        <details className="rounded-md border bg-muted/20 p-3">
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            {t("settings.sections.jira.advancedJql", { defaultValue: "Advanced: edit JQL directly" })}
-          </summary>
-          <div className="mt-3 space-y-2">
-            <textarea
-              id="jira-jql"
-              value={draft.jiraJql}
-              onChange={(e) => setDraft("jiraJql", e.target.value)}
-              rows={2}
-              disabled={!draft.jiraImportEnabled}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              placeholder="assignee = currentUser() order by updated DESC"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("settings.sections.jira.jqlHelp", {
-                defaultValue:
-                  "Jira Query Language decides which issues are pulled into the knowledge base. The default only shows issues assigned to you.",
-              })}
-            </p>
-            <div className="rounded-md border bg-background p-2 text-xs text-muted-foreground">
-              <p className="mb-1 font-medium text-foreground">{t("settings.sections.jira.jqlSyntaxTitle", { defaultValue: "How to write JQL" })}</p>
-              <ul className="list-disc space-y-0.5 pl-4">
-                <li><code>assignee = currentUser()</code> / <code>reporter = currentUser()</code></li>
-                <li><code>issuetype in (任务, 缺陷)</code></li>
-                <li><code>priority in (高, 中)</code></li>
-                <li><code>project = AERDM AND …</code></li>
-              </ul>
-              <p className="mt-1">
-                {t("settings.sections.jira.jqlSyntax", {
-                  defaultValue:
-                    "Issue-type and status names must match your server's exact spelling and case. Combine conditions with AND/OR, and preview the query in Jira's web Issue Navigator before saving.",
-                })}
-              </p>
-            </div>
-          </div>
-        </details>
-      </div>
+      <p className="-mt-4 text-xs text-muted-foreground">
+        {t("settings.sections.jira.filtersMoved", {
+          defaultValue: "Issue filters (owner / types / priorities) are set on the Jira page, not here.",
+        })}
+      </p>
 
       {/* Poll schedule */}
       {draft.jiraImportEnabled && (

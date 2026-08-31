@@ -1,18 +1,21 @@
 /**
- * Pure Jira JQL manipulation, shared by the settings filter builder and the
- * Jira view's scope toggle.
+ * Pure Jira JQL manipulation, used by the Jira view's filter bar.
  *
  * Deliberately dependency-free (no imports, no store, no fetch) so it can be
  * unit-tested in isolation and reused from any environment. It models the
- * narrow slice of JQL the visual builder can express:
+ * slice of JQL the visual filter controls express:
  *
  *   [assignee = currentUser() | reporter = currentUser()]
  *     [AND issuetype in (...)] [AND priority in (...)]
- *     order by updated DESC
+ *     [order by …]
  *
- * Anything richer (project =, status !=, OR between clauses, functions other
- * than currentUser()) is "custom": the builder can't represent it, so
- * `parseJiraJql` flags `custom` and the raw textarea stays authoritative.
+ * Anything richer (project =, status clauses, OR between clauses, negated
+ * type/priority, functions other than currentUser()) can't be edited by the
+ * controls, but must not be destroyed by them: `parseJiraJql` keeps such
+ * clauses verbatim in `customClauses` (an OR chain stays one indivisible
+ * entry) and preserves a custom top-level ORDER BY, and `buildJiraJql`
+ * re-emits them. There is no raw-JQL editor anymore — filters are managed
+ * entirely from the Jira page and persisted into `config.jql`.
  */
 
 export type JiraScope = "assignee" | "reporter" | "all"
@@ -23,11 +26,33 @@ export interface JiraFilterState {
   types: string[]
   /** Priority display names, quotes stripped (e.g. ["高"]). */
   priorities: string[]
-  /** True when the JQL has parts the builder can't represent — controls disable. */
+  /**
+   * Top-level clauses the controls can't express, kept verbatim in original
+   * order. An OR-connected chain is a single entry (never split — splitting
+   * would change its semantics). Re-emitted by `buildJiraJql`.
+   */
+  customClauses: string[]
+  /** Derived: whether `customClauses` is non-empty. */
   custom: boolean
-  /** The original input, for the advanced editor to stay lossless. */
+  /**
+   * The verbatim top-level `order by` / `group by` segment ("" when the
+   * query has none — `buildJiraJql` then applies the default).
+   */
+  orderBy: string
+  /** The original input. */
   raw: string
 }
+
+/** What `buildJiraJql` needs; `JiraFilterState` structurally satisfies it. */
+export interface JiraFilterInput {
+  scope: JiraScope
+  types: string[]
+  priorities: string[]
+  customClauses?: string[]
+  orderBy?: string
+}
+
+const DEFAULT_ORDER_BY = "order by updated DESC"
 
 const CJK_RANGE = "一-龥"
 // Unquoted JQL identifiers are safe for letters/digits/underscore/CJK. Anything
@@ -205,87 +230,119 @@ function fieldClause(text: string, field: string): { negated: boolean; values: s
   return null
 }
 
-function joinWhere(segments: Segment[]): string {
-  // Do NOT strip `()`: `currentUser()` is a function call, not an empty group.
-  return segments
-    .map((s, i) => (i === 0 ? s.text : `${s.precede || "AND"} ${s.text}`))
-    .join(" ")
-    .trim()
+/** The owner field if `entry` is a single (optionally parenthesized)
+ *  currentUser clause; null for anything else, incl. OR chains. */
+function singleOwnerField(entry: string): "assignee" | "reporter" | null {
+  const segs = splitTopLevel(entry)
+  if (segs.length !== 1) return null
+  return currentUserField(segs[0].text)
+}
+
+/** Whether `entry` combines clauses with a top-level OR. */
+function hasTopLevelOr(entry: string): boolean {
+  const segs = splitTopLevel(entry)
+  return segs.length > 1 && segs.some((s) => s.precede === "OR")
 }
 
 /**
- * Build a JQL string from filter state. Always appends `order by updated DESC`.
+ * Build a JQL string from filter state. Emits the owner clause first, then
+ * the custom clauses verbatim (OR-chained entries get wrapped in parentheses,
+ * since the controls treat them as one indivisible unit), then issuetype /
+ * priority, then `orderBy` (defaulting to `order by updated DESC`).
  * Emits `in (...)` for both single- and multi-value fields.
+ *
+ * Redundancy rules for owner clauses inside `customClauses`:
+ * - scope "all" drops every single-clause owner restriction ("all" means
+ *   unrestricted).
+ * - a clause duplicating the active scope clause is dropped (it's already
+ *   emitted above); a DIFFERENT owner clause is kept (the builder can't
+ *   express owner=assignee-plus-reporter, but must not silently loosen a
+ *   restriction it inherited).
  */
-export function buildJiraJql(f: Omit<JiraFilterState, "custom" | "raw">): string {
+export function buildJiraJql(f: JiraFilterInput): string {
   const clauses: string[] = []
   if (f.scope === "assignee") clauses.push("assignee = currentUser()")
   else if (f.scope === "reporter") clauses.push("reporter = currentUser()")
+  for (const entry of f.customClauses ?? []) {
+    const text = entry.trim()
+    if (!text) continue
+    const owner = singleOwnerField(text)
+    if (owner && (f.scope === "all" || f.scope === owner)) continue
+    clauses.push(hasTopLevelOr(text) ? `(${text})` : text)
+  }
   if (f.types.length > 0) clauses.push(`issuetype in (${f.types.map(quoteIfNeeded).join(", ")})`)
   if (f.priorities.length > 0) clauses.push(`priority in (${f.priorities.map(quoteIfNeeded).join(", ")})`)
   const where = clauses.join(" AND ")
-  return where ? `${where} order by updated DESC` : "order by updated DESC"
+  const order = (f.orderBy ?? "").trim() || DEFAULT_ORDER_BY
+  return where ? `${where} ${order}` : order
 }
 
 /**
- * Best-effort parse of a JQL into filter state. Sets `custom` (and disables the
- * builder) when anything unrepresentable is present: an OR connector, a
- * negated type/priority, both currentUser clauses, or any other clause.
+ * Best-effort parse of a JQL into filter state. Clauses the controls can't
+ * express — OR chains, negated type/priority, a second conflicting owner
+ * clause, project/status/text/etc. — are kept verbatim in `customClauses`
+ * so a later `buildJiraJql` re-emits them unchanged. `custom` flags their
+ * presence for callers that want to warn the user.
  */
 export function parseJiraJql(jql: string): JiraFilterState {
   const raw = jql.trim()
-  const { where } = splitOrderBy(raw)
+  const { where, order } = splitOrderBy(raw)
   const segs = splitTopLevel(where)
   let scope: JiraScope = "all"
   const types: string[] = []
   const priorities: string[] = []
-  let custom = false
+  const customClauses: string[] = []
 
+  // Group segments into OR-connected chains: an AND (or the first segment)
+  // starts a new group; an OR extends the current one. Multi-segment groups
+  // are opaque to the controls and kept whole.
+  const groups: Segment[][] = []
+  let group: Segment[] = []
   for (const seg of segs) {
-    if (seg.precede === "OR") custom = true
-    const cu = currentUserField(seg.text)
-    if (cu) {
-      if (scope !== "all" && scope !== cu) custom = true
-      scope = cu
+    if (group.length > 0 && seg.precede === "OR") {
+      group.push(seg)
+    } else {
+      if (group.length > 0) groups.push(group)
+      group = [seg]
+    }
+  }
+  if (group.length > 0) groups.push(group)
+
+  for (const g of groups) {
+    if (g.length > 1) {
+      customClauses.push(g.map((s) => s.text).join(" OR "))
       continue
     }
-    const typeM = fieldClause(seg.text, "issuetype")
+    const text = g[0].text
+    const cu = currentUserField(text)
+    if (cu) {
+      if (scope === "all") scope = cu
+      else if (scope !== cu) customClauses.push(text)
+      // A duplicate of the same owner clause is a no-op; drop it.
+      continue
+    }
+    const typeM = fieldClause(text, "issuetype")
     if (typeM) {
-      if (typeM.negated) custom = true
+      if (typeM.negated) customClauses.push(text)
       else types.push(...typeM.values)
       continue
     }
-    const prioM = fieldClause(seg.text, "priority")
+    const prioM = fieldClause(text, "priority")
     if (prioM) {
-      if (prioM.negated) custom = true
+      if (prioM.negated) customClauses.push(text)
       else priorities.push(...prioM.values)
       continue
     }
-    custom = true // any other clause (project=, status, text~, …)
+    customClauses.push(text) // any other clause (project=, status, text~, …)
   }
 
-  return { scope, types, priorities, custom, raw }
-}
-
-/**
- * Rewrite a base JQL to force a scope, without ever mutating the base. Used by
- * the Jira view's scope toggle (which re-queries but does NOT persist).
- *
- * - scope "all": return the base unchanged (i.e. "run the configured query").
- *   With a default that already contains `assignee = currentUser()`, "all"
- *   still yields only your issues — the UI labels it "按设置中的 JQL".
- * - scope "assignee"/"reporter": drop any existing top-level
- *   `assignee|reporter = currentUser()` clauses, then AND the requested one.
- *   Parenthesized/inner occurrences are left alone and the clause is appended
- *   redundantly (semantically safe).
- */
-export function applyJiraScope(baseJql: string, scope: JiraScope): string {
-  const base = baseJql.trim()
-  if (scope === "all") return base
-  const { where, order } = splitOrderBy(base)
-  const survivors = splitTopLevel(where).filter((s) => currentUserField(s.text) === null)
-  const cleaned = joinWhere(survivors)
-  const clause = scope === "assignee" ? "assignee = currentUser()" : "reporter = currentUser()"
-  const newWhere = cleaned ? `${cleaned} AND ${clause}` : clause
-  return order ? `${newWhere} ${order}` : newWhere
+  return {
+    scope,
+    types,
+    priorities,
+    customClauses,
+    custom: customClauses.length > 0,
+    orderBy: order,
+    raw,
+  }
 }

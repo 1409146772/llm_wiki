@@ -57,6 +57,7 @@ export function upsertLedgerForTask(
     lastAnalyzedUpdated: existing?.lastAnalyzedUpdated ?? null,
     analysis: existing?.analysis,
     analysisError: existing?.analysisError,
+    analysisErrorCode: existing?.analysisErrorCode,
   }
 }
 
@@ -112,9 +113,11 @@ export async function reconcileTasks(
         if ("issues" in result) {
           entry.analysis = result
           entry.analysisError = undefined
+          entry.analysisErrorCode = undefined
         } else {
           entry.analysis = undefined
           entry.analysisError = result.reason
+          entry.analysisErrorCode = result.code
         }
         entry.lastAnalyzedUpdated = task.updated
       }
@@ -144,9 +147,9 @@ export async function reconcileTasks(
       let out = entry
       if (latest.imported && !out.imported) out = { ...out, imported: true }
       if (!out.analysis && latest.analysis) {
-        out = { ...out, analysis: latest.analysis, analysisError: undefined, lastAnalyzedUpdated: latest.lastAnalyzedUpdated }
+        out = { ...out, analysis: latest.analysis, analysisError: undefined, analysisErrorCode: undefined, lastAnalyzedUpdated: latest.lastAnalyzedUpdated }
       } else if (!out.analysisError && !out.analysis && latest.analysisError) {
-        out = { ...out, analysisError: latest.analysisError, lastAnalyzedUpdated: latest.lastAnalyzedUpdated }
+        out = { ...out, analysisError: latest.analysisError, analysisErrorCode: latest.analysisErrorCode, lastAnalyzedUpdated: latest.lastAnalyzedUpdated }
       }
       return out
     })
@@ -181,7 +184,10 @@ export async function jiraPoll(projectPath?: string): Promise<void> {
     } else {
       useJiraStore.getState().setTasks(tasks)
     }
-    const updated = { ...config, lastPoll: Date.now() }
+    // Merge lastPoll into the LIVE store config, not the snapshot read at
+    // poll start — otherwise a filter change made while `jiraSearch` was in
+    // flight gets silently reverted by this write-back.
+    const updated = { ...useJiraStore.getState().config, lastPoll: Date.now() }
     useJiraStore.getState().setConfig(updated)
     await saveJiraConfig(updated).catch((err) =>
       console.warn("[jira-sync] failed to save lastPoll:", err),

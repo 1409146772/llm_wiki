@@ -17,6 +17,23 @@ import { getTaskLlmConfig } from "@/lib/llm-task-routing"
 import { hasUsableLlm } from "@/lib/has-usable-llm"
 import type { JiraTask } from "@/stores/jira-store"
 import { isFetchNetworkError } from "@/lib/tauri-fetch"
+import { extractJsonObject } from "@/lib/json-extract"
+import { resolveIngestReasoning } from "@/lib/reasoning-capabilities"
+
+/** Output budget for one analysis call. A rewrite of `suggestedDescription`
+ *  can be long (CJK ≈ 1 token/char); 700 truncated the JSON mid-object. */
+export const ANALYSIS_MAX_TOKENS = 2048
+
+/** Stable error codes so the UI can localize (`jira.analysisError.<code>`)
+ *  while the ledger keeps a free-form English `reason` for logs. */
+export type JiraAnalysisErrorCode =
+  | "off"
+  | "noLlm"
+  | "empty"
+  | "truncated"
+  | "noJson"
+  | "network"
+  | "error"
 
 export interface JiraAnalysis {
   /** One-line verdict, e.g. "描述基本合理，但缺验收标准". */
@@ -31,7 +48,9 @@ export interface JiraAnalysis {
 
 /** Rendered when analysis can't be produced (no LLM, or an error). */
 export interface JiraAnalysisUnavailable {
+  /** English fallback for logs / unknown codes; UI prefers `code`. */
   reason: string
+  code: JiraAnalysisErrorCode
 }
 
 export type JiraAnalysisResult = JiraAnalysis | JiraAnalysisUnavailable
@@ -62,35 +81,56 @@ Return ONLY a JSON object with exactly these keys:
 }
 Do not wrap the JSON in markdown fences. Do not add commentary outside the JSON.`
 
-/** Extract the first balanced JSON object from an LLM reply. */
-export function parseAnalysisJson(text: string): JiraAnalysis | null {
-  // Trim BOM / whitespace and strip a leading ```json fence if the model
-  // wrapped the payload anyway.
-  let body = text.trim().replace(/^﻿/, "")
-  const fence = body.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/)
-  if (fence) body = fence[1].trim()
+/** Parse-failure classifications that map 1:1 to `JiraAnalysisErrorCode`. */
+export type ParseFailure = "empty" | "truncated" | "noJson"
 
-  const start = body.indexOf("{")
-  const end = body.lastIndexOf("}")
-  if (start < 0 || end <= start) return null
+export type ParseOutcome = { analysis: JiraAnalysis } | { code: ParseFailure }
+
+/** Default (English) reasons per parse-failure class; the UI localizes by code. */
+const PARSE_ERROR_REASONS: Record<ParseFailure, string> = {
+  empty: "The model returned an empty response.",
+  truncated: "The model's response was cut off before a complete JSON object.",
+  noJson: "Analysis returned an unexpected response; no JSON found.",
+}
+
+/**
+ * Extract the first balanced JSON object from an LLM reply. Uses the shared
+ * string/escape-aware brace walk (tolerates prose around the object and
+ * markdown fences), then classifies why parsing failed so callers can show an
+ * actionable message instead of a generic "no JSON found".
+ */
+export function parseAnalysisJson(text: string): ParseOutcome {
+  // Trim BOM / whitespace.
+  const body = text.trim().replace(/^﻿/, "")
+  if (!body) return { code: "empty" }
+
+  const candidate = extractJsonObject(body)
+  if (!candidate) {
+    // An opening brace with no balanced object means the reply was cut off
+    // mid-JSON (token limit); otherwise the model simply didn't return JSON.
+    return { code: body.includes("{") ? "truncated" : "noJson" }
+  }
 
   try {
-    const parsed = JSON.parse(body.slice(start, end + 1)) as Partial<JiraAnalysis>
+    const parsed = JSON.parse(candidate) as Partial<JiraAnalysis>
     const issues = Array.isArray(parsed.issues)
       ? parsed.issues.filter((i): i is string => typeof i === "string")
       : []
     const confidence =
       parsed.confidence === "low" || parsed.confidence === "high" ? parsed.confidence : "medium"
     return {
-      summary: typeof parsed.summary === "string" ? parsed.summary : "",
-      issues,
-      suggestedDescription:
-        typeof parsed.suggestedDescription === "string" ? parsed.suggestedDescription : "",
-      confidence,
-      generatedAt: Date.now(),
+      analysis: {
+        summary: typeof parsed.summary === "string" ? parsed.summary : "",
+        issues,
+        suggestedDescription:
+          typeof parsed.suggestedDescription === "string" ? parsed.suggestedDescription : "",
+        confidence,
+        generatedAt: Date.now(),
+      },
     }
   } catch {
-    return null
+    // Braces balanced but the content still isn't valid JSON.
+    return { code: "noJson" }
   }
 }
 
@@ -149,10 +189,27 @@ export async function completeLlm(
       onError: (err) => { errorMessage = err.message },
     },
     undefined,
-    { max_tokens: 700, reasoning: { mode: "auto" } },
+    // Reasoning follows the ingest routing setting (default off) like every
+    // other structured caller — "auto" let thinking models burn the output
+    // budget on chain-of-thought and truncate the JSON.
+    { max_tokens: ANALYSIS_MAX_TOKENS, reasoning: resolveIngestReasoning(config) },
   )
   if (errorMessage) throw new Error(errorMessage)
   return content
+}
+
+/** Appended to the user message for one automatic retry after a parse
+ *  failure. Keeps the system prompt untouched. */
+const RETRY_SUFFIX = `\n\n## Retry\nYour previous reply could not be parsed as JSON. Respond with ONLY the JSON object specified — no prose, no markdown fences.`
+
+/** One LLM round-trip: complete → parse (classifying failures). Throws on
+ *  transport errors so the caller can distinguish them from parse issues. */
+async function attemptAnalysis(
+  config: LlmConfig,
+  user: string,
+): Promise<ParseOutcome> {
+  const raw = await completeLlm(config, SYSTEM_PROMPT, user)
+  return parseAnalysisJson(raw)
 }
 
 export interface AnalyzeOptions {
@@ -175,29 +232,30 @@ export async function analyzeJiraTask(
 ): Promise<JiraAnalysisResult> {
   const level = options.analysisLevel ?? "basic"
   if (level === "off") {
-    return { reason: "AI analysis is disabled (off)." }
+    return { reason: "AI analysis is disabled (off).", code: "off" }
   }
 
   const config = options.llmConfig ?? getTaskLlmConfig("ingest")
   if (!hasUsableLlm(config)) {
-    return { reason: "No usable LLM is configured. Analysis skipped." }
+    return { reason: "No usable LLM is configured. Analysis skipped.", code: "noLlm" }
   }
 
   // For `deep` we prefer a longer prompt; `basic` focuses on the description
   // alone but still allows context. The caller supplies contextSnippets.
   const user = buildAnalysisPrompt(task, options.contextSnippets ?? [])
   try {
-    const raw = await completeLlm(config, SYSTEM_PROMPT, user)
-    const parsed = parseAnalysisJson(raw)
-    if (!parsed) {
-      return { reason: "Analysis returned an unexpected response; no JSON found." }
-    }
-    return parsed
+    let outcome = await attemptAnalysis(config, user)
+    if ("analysis" in outcome) return outcome.analysis
+    // Unparsable reply — retry once with an explicit "JSON only" reminder.
+    // Models drift more on long CJK descriptions than they refuse.
+    const retry = await attemptAnalysis(config, `${user}${RETRY_SUFFIX}`)
+    if ("analysis" in retry) return retry.analysis
+    return { reason: PARSE_ERROR_REASONS[retry.code], code: retry.code }
   } catch (err) {
     if (isFetchNetworkError(err)) {
-      return { reason: "Network error reaching the LLM during analysis." }
+      return { reason: "Network error reaching the LLM during analysis.", code: "network" }
     }
-    return { reason: err instanceof Error ? err.message : String(err) }
+    return { reason: err instanceof Error ? err.message : String(err), code: "error" }
   }
 }
 

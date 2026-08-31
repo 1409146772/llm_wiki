@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest"
 import fc from "fast-check"
-import { extractJsonObject } from "./sweep-reviews"
+import { extractJsonObject } from "./json-extract"
 
 /** A valid JSON value. */
 const jsonValueArb: fc.Arbitrary<unknown> = fc.jsonValue()
