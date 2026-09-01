@@ -126,6 +126,32 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("Fix crash")
     expect(prompt).toContain("kb snippet")
   })
+
+  it("omits the comment section when there are no comments", () => {
+    const prompt = buildAnalysisPrompt(task(), [])
+    expect(prompt).not.toContain("Comment thread")
+  })
+
+  it("renders each comment with author and date", () => {
+    const prompt = buildAnalysisPrompt(task(), [], [
+      { author: "李四", created: Date.UTC(2026, 7, 30), body: "复现步骤已补充到附件" },
+      { author: "王五", created: Date.UTC(2026, 7, 31), body: "需要兼容旧版本" },
+    ])
+    expect(prompt).toContain("## Comment thread")
+    expect(prompt).toContain("Comment 1 — 李四")
+    expect(prompt).toContain("复现步骤已补充到附件")
+    expect(prompt).toContain("Comment 2 — 王五")
+    expect(prompt).toContain("需要兼容旧版本")
+  })
+
+  it("truncates an over-long comment body", async () => {
+    const { PROMPT_COMMENT_BODY_LIMIT } = await import("./jira-analyze")
+    const prompt = buildAnalysisPrompt(task(), [], [
+      { author: "a", created: 0, body: "x".repeat(PROMPT_COMMENT_BODY_LIMIT + 10) },
+    ])
+    expect(prompt).toContain("…")
+    expect(prompt.length).toBeLessThan(PROMPT_COMMENT_BODY_LIMIT + 500)
+  })
 })
 
 describe("analyzeJiraTask", () => {

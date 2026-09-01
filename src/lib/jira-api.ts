@@ -12,7 +12,7 @@
  */
 import { getHttpFetch } from "@/lib/tauri-fetch"
 import { normalizeJiraServer, type JiraConfig } from "@/lib/jira-config"
-import type { JiraTask } from "@/stores/jira-store"
+import type { JiraTask, JiraTaskComment } from "@/stores/jira-store"
 import { isResolvedStatus } from "@/stores/jira-store"
 
 const API_VERSION = "2"
@@ -239,6 +239,76 @@ export async function jiraGetIssue(config: JiraConfig, key: string): Promise<Jir
   const task = mapJiraIssue(raw)
   if (!task) throw new JiraApiError(`Could not parse issue ${key}.`, 0)
   return task
+}
+
+/** Comments are fed to the AI analysis; cap how far back the prompt goes. */
+export const MAX_ANALYSIS_COMMENTS = 50
+
+/**
+ * Render a comment body to plain text. Jira Server 9.12 wiki markup arrives
+ * as a plain string; Cloud-style payloads may carry an ADF doc node —
+ * flatten both best-effort (mirrors `mapJiraIssue`'s description handling).
+ */
+function renderCommentBody(body: unknown): string {
+  if (typeof body === "string") return body
+  if (Array.isArray(body)) {
+    return body.map((b) => renderAdfBlock(b as { type?: string; content?: unknown })).filter(Boolean).join("\n")
+  }
+  if (body && typeof body === "object") {
+    const doc = body as { content?: unknown[] }
+    if (Array.isArray(doc.content)) {
+      return doc.content
+        .map((b) => renderAdfBlock(b as { type?: string; content?: unknown }))
+        .filter(Boolean)
+        .join("\n")
+    }
+  }
+  return ""
+}
+
+/**
+ * Fetch an issue's comments (REST v2 `GET /issue/{key}/comment`, same
+ * endpoint the jira-tool skill's `jira.comments()` wraps). Returns them in
+ * chronological order; when the thread exceeds `maxComments` only the most
+ * recent window is kept — the tail of the discussion is what a reviewer
+ * needs. Throws `JiraApiError` on transport/auth problems.
+ */
+export async function jiraComments(
+  config: JiraConfig,
+  key: string,
+  options: { maxComments?: number } = {},
+): Promise<JiraTaskComment[]> {
+  const max = Math.max(1, Math.min(200, options.maxComments ?? MAX_ANALYSIS_COMMENTS))
+  const page = await jiraFetch<{ total?: number; comments?: unknown[] }>(
+    config,
+    `issue/${encodeURIComponent(key)}/comment?maxResults=100`,
+  )
+  let raw = Array.isArray(page.comments) ? page.comments : []
+  // Long thread: re-page from the end so the window holds the latest comments.
+  const total = typeof page.total === "number" ? page.total : raw.length
+  if (total > raw.length) {
+    const tail = await jiraFetch<{ comments?: unknown[] }>(
+      config,
+      `issue/${encodeURIComponent(key)}/comment?maxResults=${max}&startAt=${Math.max(0, total - max)}`,
+    )
+    raw = Array.isArray(tail.comments) ? tail.comments : raw
+  }
+  const recent = raw.slice(-max)
+  const out: JiraTaskComment[] = []
+  for (const item of recent) {
+    if (!item || typeof item !== "object") continue
+    const c = item as {
+      author?: { displayName?: unknown; name?: unknown }
+      created?: unknown
+      body?: unknown
+    }
+    const body = renderCommentBody(c.body).trim()
+    if (!body) continue
+    const author =
+      (c.author?.displayName?.toString() ?? c.author?.name?.toString() ?? "") || "unknown"
+    out.push({ author, created: parseJiraTime(c.created), body })
+  }
+  return out
 }
 
 /** Update an issue's description (used for the optional write-back). */

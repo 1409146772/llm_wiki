@@ -5,18 +5,14 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, BookUp, CheckCircle2, CircleAlert, Loader2, RotateCw } from "lucide-react"
 import { useJiraStore, type JiraTask } from "@/stores/jira-store"
 import { useWikiStore } from "@/stores/wiki-store"
-import { analyzeJiraTask, isJiraAnalysis } from "@/lib/jira-analyze"
-import { upsertLedgerForTask } from "@/lib/jira-sync"
-import { saveJiraLedger } from "@/lib/jira-persist"
+import { isJiraAnalysis } from "@/lib/jira-analyze"
+import { runAnalysis } from "./run-jira-analysis"
 import { refreshProjectFileTree } from "@/lib/project-file-tree-refresh"
 import { jiraTaskToWiki } from "./jira-ingest"
 
 interface Props {
   onBack: () => void
 }
-
-// Guard against concurrent single-issue analyses (bounce back + reopen).
-const inflight = new Set<string>()
 
 export function JiraTaskDetail({ onBack }: Props) {
   const { t } = useTranslation()
@@ -29,43 +25,20 @@ export function JiraTaskDetail({ onBack }: Props) {
   const [analyzing, setAnalyzing] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
-  // Analyze one issue on demand and persist to the ledger. Never throws
-  // (analyzeJiraTask is best-effort). `force` retries a cached error.
-  const runAnalysis = useCallback(async (task: JiraTask, force: boolean) => {
-    const proj = useWikiStore.getState().project
-    if (!proj) return
-    const level = useJiraStore.getState().config.analysisLevel
-    if (level === "off") return
-    if (inflight.has(task.key)) return
-    const existing = useJiraStore.getState().ledger.find((e) => e.key === task.key)
-    if (!force && (existing?.analysis || existing?.analysisError)) return
-
-    inflight.add(task.key)
-    setAnalyzing(true)
-    try {
-      const result = await analyzeJiraTask(task, { analysisLevel: level })
-      // Re-read the freshest entry (a poll may have merged meanwhile).
-      const fresh = useJiraStore.getState().ledger.find((e) => e.key === task.key)
-      const entry = upsertLedgerForTask(task, fresh, useJiraStore.getState().config.retentionHours)
-      if ("issues" in result) {
-        entry.analysis = result
-        entry.analysisError = undefined
-        entry.analysisErrorCode = undefined
-      } else {
-        entry.analysis = undefined
-        entry.analysisError = result.reason
-        entry.analysisErrorCode = result.code
+  // Analyze one issue on demand and persist to the ledger (shared runner,
+  // also used by the list toolbar's analyze-all). `force` re-runs even when
+  // a cached analysis exists — that is the explicit "re-analyze" button.
+  const runTaskAnalysis = useCallback(
+    async (task: JiraTask, force: boolean) => {
+      setAnalyzing(true)
+      try {
+        await runAnalysis(task, force)
+      } finally {
+        setAnalyzing(false)
       }
-      entry.lastAnalyzedUpdated = task.updated
-      useJiraStore.getState().upsertLedger(entry)
-      await saveJiraLedger(proj.path, useJiraStore.getState().ledger).catch((err) =>
-        console.warn("[jira] persist analysis failed:", err),
-      )
-    } finally {
-      inflight.delete(task.key)
-      setAnalyzing(false)
-    }
-  }, [])
+    },
+    [],
+  )
 
   // When a detail opens without a cached result, kick off one analysis pass.
   const taskKey = detailTask?.key
@@ -73,7 +46,7 @@ export function JiraTaskDetail({ onBack }: Props) {
     if (!detailTask || !project || config.analysisLevel === "off") return
     const entry = useJiraStore.getState().ledger.find((e) => e.key === detailTask.key)
     if (entry?.analysis || entry?.analysisError) return
-    void runAnalysis(detailTask, false)
+    void runTaskAnalysis(detailTask, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskKey, project, config.analysisLevel])
 
@@ -149,6 +122,18 @@ export function JiraTaskDetail({ onBack }: Props) {
             <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
               <CheckCircle2 className="h-4 w-4 text-blue-500" />
               {t("jira.analysis", { defaultValue: "AI analysis" })}
+              {!analyzing && !analysisOff && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-1 h-6 gap-1 px-2 text-xs text-muted-foreground"
+                  onClick={() => void runTaskAnalysis(detailTask, true)}
+                  title={t("jira.reanalyzeHint", { defaultValue: "Run the AI analysis again, replacing the cached result" })}
+                >
+                  <RotateCw className="h-3 w-3" />
+                  {t("jira.reanalyze", { defaultValue: "Re-analyze" })}
+                </Button>
+              )}
             </h3>
 
             {analysis && isJiraAnalysis(analysis) ? (
@@ -191,7 +176,7 @@ export function JiraTaskDetail({ onBack }: Props) {
                     variant="ghost"
                     size="sm"
                     className="h-6 shrink-0 gap-1 px-2 text-xs"
-                    onClick={() => void runAnalysis(detailTask, true)}
+                    onClick={() => void runTaskAnalysis(detailTask, true)}
                   >
                     <RotateCw className="h-3 w-3" />
                     {t("jira.retryAnalysis", { defaultValue: "Retry" })}

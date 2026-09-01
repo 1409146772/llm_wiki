@@ -15,7 +15,7 @@ import type { LlmConfig } from "@/stores/wiki-store"
 import { streamChat } from "@/lib/llm-client"
 import { getTaskLlmConfig } from "@/lib/llm-task-routing"
 import { hasUsableLlm } from "@/lib/has-usable-llm"
-import type { JiraTask } from "@/stores/jira-store"
+import type { JiraTask, JiraTaskComment } from "@/stores/jira-store"
 import { isFetchNetworkError } from "@/lib/tauri-fetch"
 import { extractJsonObject } from "@/lib/json-extract"
 import { resolveIngestReasoning } from "@/lib/reasoning-capabilities"
@@ -74,9 +74,12 @@ const SYSTEM_PROMPT = `You are a senior engineering reviewer. You evaluate wheth
 
 You will be given:
 1. A Jira task (key, type, title, description, optional acceptance criteria).
-2. Optional context from the project knowledge base.
+2. The issue's comment thread, if any.
+3. Optional context from the project knowledge base.
 
 Assess the description for: missing requirements, ambiguity, contradictions, missing acceptance criteria, scope creep, missing dependencies, unverifiable claims, and unsafe/extreme wording.
+
+Treat the comment thread as part of the issue's record: decisions, clarifications, or extra requirements stated in comments count as requirements, and a comment that contradicts the description is itself an issue to report. Do not count a gap as "missing" when a comment already resolves it.
 
 Return ONLY a JSON object with exactly these keys:
 {
@@ -148,11 +151,34 @@ function renderContextSnippets(snippets: Array<{ title: string; snippet: string 
     .join("\n")
 }
 
+/** Per-comment body budget and thread window for the prompt. The newest
+ *  comments matter most (they carry the latest decisions), so callers keep
+ *  the tail of long threads and we truncate each body defensively. */
+export const PROMPT_COMMENT_BODY_LIMIT = 800
+
+/** Render the comment thread for the prompt. Empty when there are none, so
+ *  the whole section is omitted rather than showing a placeholder. */
+export function renderPromptComments(comments: JiraTaskComment[]): string {
+  return comments
+    .map((c, i) => {
+      const day = new Date(c.created).toISOString().slice(0, 10)
+      const body = c.body.length > PROMPT_COMMENT_BODY_LIMIT
+        ? `${c.body.slice(0, PROMPT_COMMENT_BODY_LIMIT)}…`
+        : c.body
+      return `### Comment ${i + 1} — ${c.author} (${day})\n${body}`
+    })
+    .join("\n\n")
+}
+
 /**
  * Build the user message for the analysis request. Pure so unit tests can
  * assert the prompt shape without invoking the LLM.
  */
-export function buildAnalysisPrompt(task: JiraTask, contextSnippets: string[]): string {
+export function buildAnalysisPrompt(
+  task: JiraTask,
+  contextSnippets: string[],
+  comments: JiraTaskComment[] = [],
+): string {
   return [
     `# Jira task`,
     `- Key: ${task.key}`,
@@ -163,14 +189,18 @@ export function buildAnalysisPrompt(task: JiraTask, contextSnippets: string[]): 
     ``,
     `## Description`,
     task.description || "(no description)",
+    comments.length > 0
+      ? [``, `## Comment thread`, renderPromptComments(comments)]
+      : [],
     ``,
     `## Knowledge base context`,
     renderContextSnippets(
       contextSnippets.map((snippet, i) => ({ title: `snippet ${i + 1}`, snippet })),
     ),
     ``,
-    `Assess the description above for completeness, clarity, and technical soundness.`,
+    `Assess the description above for completeness, clarity, and technical soundness, taking the comment thread into account when present.`,
   ]
+    .flat()
     .filter((line) => line !== "")
     .join("\n")
 }
@@ -225,6 +255,8 @@ export interface AnalyzeOptions {
   llmConfig?: LlmConfig
   /** Knowledge-base snippets to fold into the prompt (already fetched). */
   contextSnippets?: string[]
+  /** The issue's comment thread (already fetched) to fold into the prompt. */
+  comments?: JiraTaskComment[]
   /** Skip the LLM entirely and return an "off" placeholder. */
   analysisLevel?: "off" | "basic" | "deep"
 }
@@ -249,8 +281,10 @@ export async function analyzeJiraTask(
   }
 
   // For `deep` we prefer a longer prompt; `basic` focuses on the description
-  // alone but still allows context. The caller supplies contextSnippets.
-  const user = buildAnalysisPrompt(task, options.contextSnippets ?? [])
+  // alone but still allows context. The caller supplies contextSnippets and
+  // the comment thread (comments are part of the analysis basis at every
+  // level above `off`).
+  const user = buildAnalysisPrompt(task, options.contextSnippets ?? [], options.comments ?? [])
   try {
     let outcome = await attemptAnalysis(config, user)
     if ("analysis" in outcome) return outcome.analysis

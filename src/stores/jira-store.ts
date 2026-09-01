@@ -22,6 +22,17 @@ export interface JiraTask {
 }
 
 /**
+ * One comment on an issue, projected for the AI analysis prompt. `body` is
+ * already rendered to plain text (wiki markup / ADF flattened by the API
+ * layer); `created` is epoch ms.
+ */
+export interface JiraTaskComment {
+  author: string
+  created: number
+  body: string
+}
+
+/**
  * A ledger record for a single issue across the app's lifetime. Tracks
  * whether the user chose to import it into the wiki, caches the AI
  * analysis, and the retention bookkeeping that lets resolved-but-unimported

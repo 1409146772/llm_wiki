@@ -12,7 +12,7 @@
  * user's explicit choice via the detail pane's "ingest to wiki" button.
  */
 import { loadJiraConfig, saveJiraConfig } from "@/lib/project-store"
-import { jiraSearch } from "@/lib/jira-api"
+import { jiraSearch, jiraComments } from "@/lib/jira-api"
 import { useJiraStore, type JiraTask, type JiraLedgerEntry } from "@/stores/jira-store"
 import { useWikiStore } from "@/stores/wiki-store"
 import { analyzeJiraTask } from "@/lib/jira-analyze"
@@ -109,7 +109,15 @@ export async function reconcileTasks(
         entry.lastAnalyzedUpdated !== null && task.updated !== entry.lastAnalyzedUpdated
       const retryError = options.forceRetryErrors === true && Boolean(entry.analysisError)
       if (analysisLevel !== "off" && options.analyze !== false && (fresh || changed || retryError)) {
-        const result = await analyzeJiraTask(task, { analysisLevel })
+        // Comment thread is part of the analysis basis; best-effort like the
+        // manual paths — a failed fetch analyzes the description alone.
+        const comments = await jiraComments(useJiraStore.getState().config, task.key).catch(
+          (err: unknown) => {
+            console.warn(`[jira-sync] comment fetch failed for ${task.key}:`, err)
+            return []
+          },
+        )
+        const result = await analyzeJiraTask(task, { analysisLevel, comments })
         if ("issues" in result) {
           entry.analysis = result
           entry.analysisError = undefined

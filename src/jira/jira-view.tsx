@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { RefreshCw, Settings2, Clock, ArrowLeft, Inbox } from "lucide-react"
+import { RefreshCw, Settings2, Clock, ArrowLeft, Inbox, Sparkles, Loader2 } from "lucide-react"
+import { analyzeAllTasks } from "./run-jira-analysis"
 import { useJiraStore, type JiraTask } from "@/stores/jira-store"
 import { useWikiStore } from "@/stores/wiki-store"
 import { jiraSearch, jiraIssueTypes, jiraPriorities, JiraApiError, type JiraNamedEntity } from "@/lib/jira-api"
@@ -36,6 +37,41 @@ export function JiraView() {
   const [mode, setMode] = useState<Mode>("list")
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Batch analysis of every unanalyzed issue on the current list. Runs
+  // sequentially (one LLM call at a time) so it matches the poll's pacing.
+  const [batchAnalyzing, setBatchAnalyzing] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
+  const batchAnalyze = useCallback(async () => {
+    if (batchAnalyzing || config.analysisLevel === "off") return
+    setBatchAnalyzing(true)
+    setBatchProgress({ done: 0, total: 0 })
+    try {
+      const result = await analyzeAllTasks(useJiraStore.getState().tasks, (processed, total) =>
+        setBatchProgress({ done: processed, total }),
+      )
+      setError(null)
+      if (result.failed > 0) {
+        setError(
+          t("jira.batchPartial", {
+            defaultValue: "AI analysis finished: {{done}} ok, {{failed}} failed, {{skipped}} already analyzed.",
+            done: result.done,
+            failed: result.failed,
+            skipped: result.skipped,
+          }),
+        )
+      }
+    } finally {
+      setBatchAnalyzing(false)
+      setBatchProgress(null)
+    }
+  }, [batchAnalyzing, config.analysisLevel, t])
+
+  // Pending = on the current list without a cached analysis.
+  const pendingAnalysisCount = useMemo(
+    () => tasks.filter((task) => !ledger.find((e) => e.key === task.key)?.analysis).length,
+    [tasks, ledger],
+  )
 
   // The filter bar edits `config.jql` (persisted — background polling
   // follows). Derive the control state from the authoritative JQL so the
@@ -226,6 +262,32 @@ export function JiraView() {
             >
               <RefreshCw className={`mr-1.5 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               {t("jira.refresh", { defaultValue: "Refresh" })}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void batchAnalyze()}
+              disabled={batchAnalyzing || config.analysisLevel === "off" || tasks.length === 0}
+              title={
+                config.analysisLevel === "off"
+                  ? t("jira.analysisDisabled", { defaultValue: "AI analysis is turned off. Enable an analysis level in Settings → Jira." })
+                  : t("jira.analyzeAllHint", { defaultValue: "Analyze every issue on this list that has no AI analysis yet" })
+              }
+            >
+              {batchAnalyzing ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 h-4 w-4" />
+              )}
+              {batchAnalyzing && batchProgress
+                ? t("jira.batchProgress", {
+                    defaultValue: "Analyzing {{done}}/{{total}}",
+                    done: batchProgress.done,
+                    total: batchProgress.total,
+                  })
+                : t("jira.analyzeAll", { defaultValue: "AI analyze all" })}
+              {!batchAnalyzing && pendingAnalysisCount > 0 &&
+                ` (${pendingAnalysisCount})`}
             </Button>
             <Button
               variant="ghost"

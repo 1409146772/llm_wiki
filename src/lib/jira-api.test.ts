@@ -5,6 +5,7 @@ import {
   jiraTestConnection,
   jiraIssueTypes,
   jiraPriorities,
+  jiraComments,
   JiraApiError,
   __testing,
 } from "./jira-api"
@@ -117,6 +118,97 @@ describe("jiraSearch", () => {
   it("throws JiraApiError on 401", async () => {
     mockHttpFetch.mockResolvedValue({ ok: false, status: 401, text: async () => "Unauthorized" })
     await expect(jiraSearch(cfg)).rejects.toBeInstanceOf(JiraApiError)
+  })
+})
+
+describe("jiraComments", () => {
+  it("fetches the comment endpoint and maps author/body/created", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total: 2,
+        comments: [
+          { author: { displayName: "李四" }, created: "2026-08-30T09:00:00.000+0800", body: "复现步骤见附件" },
+          { author: { name: "wangwu" }, created: "2026-08-31T09:00:00.000+0800", body: "需兼容旧版本" },
+        ],
+      }),
+    })
+    const comments = await jiraComments(cfg, "AERDM-123")
+    expect(comments).toHaveLength(2)
+    expect(comments[0]).toMatchObject({ author: "李四", body: "复现步骤见附件" })
+    expect(comments[0].created).toBe(Date.parse("2026-08-30T09:00:00.000+0800"))
+    // Missing displayName falls back to the account name.
+    expect(comments[1].author).toBe("wangwu")
+    expect(String(mockHttpFetch.mock.calls[0][0])).toContain("/rest/api/2/issue/AERDM-123/comment")
+  })
+
+  it("flattens an ADF comment body", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total: 1,
+        comments: [
+          {
+            author: { displayName: "李四" },
+            created: "2026-08-30T09:00:00.000+0800",
+            body: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "ADF 内容" }] }] },
+          },
+        ],
+      }),
+    })
+    const comments = await jiraComments(cfg, "AERDM-9")
+    expect(comments[0].body).toContain("ADF 内容")
+  })
+
+  it("keeps only the most recent window of a long thread", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({
+      author: { displayName: `u${i}` },
+      created: "2026-08-30T09:00:00.000+0800",
+      body: `c${i}`,
+    }))
+    // First page (maxResults=100) reports total=120; the follow-up must
+    // re-page from the end so the window holds the latest 50 comments.
+    mockHttpFetch.mockImplementation((url: unknown) => {
+      const u = String(url)
+      if (u.includes("startAt=")) {
+        expect(u).toContain("startAt=70")
+        expect(u).toContain("maxResults=50")
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ total: 120, comments: many.slice(70, 120) }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ total: 120, comments: many.slice(0, 100) }),
+      })
+    })
+    const comments = await jiraComments(cfg, "AERDM-1")
+    expect(comments).toHaveLength(50)
+    // Oldest of the kept window first, newest last.
+    expect(comments[0].body).toBe("c70")
+    expect(comments[49].body).toBe("c119")
+  })
+
+  it("drops comments with an empty rendered body", async () => {
+    mockHttpFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total: 2,
+        comments: [
+          { author: { displayName: "a" }, created: 0, body: "   " },
+          { author: { displayName: "b" }, created: 0, body: "有效" },
+        ],
+      }),
+    })
+    const comments = await jiraComments(cfg, "AERDM-2")
+    expect(comments).toHaveLength(1)
+    expect(comments[0].body).toBe("有效")
   })
 })
 
